@@ -14,7 +14,7 @@ import random
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
-print("🌱 Seeding EduAlert GH database...")
+print("Seeding EduAlert GH database...")
 
 # --- Create a teacher account ---
 teacher = User(
