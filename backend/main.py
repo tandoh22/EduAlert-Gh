@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth, students, scores, attendance, predictions, admin
 from database import engine, Base
-
+import models.all_models
 # Create all tables on startup
 Base.metadata.create_all(bind=engine)
 

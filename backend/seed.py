@@ -3,10 +3,7 @@ Seed script — populates the database with sample data for testing.
 Run this once after setting up: python seed.py
 """
 from database import SessionLocal, engine, Base
-from models.user import User
-from models.student import Student
-from models.score import Score
-from models.attendance import Attendance
+from models.all_models import User, Student, Score, Attendance, Prediction
 from core.security import hash_password
 from datetime import date, timedelta
 import random
