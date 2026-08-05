@@ -22,7 +22,12 @@ class StudentResponse(BaseModel):
     class_name: str
     gender: Optional[str]
     teacher_id: int
+    user_id: Optional[int]
     school: Optional[str]
     created_at: datetime
     class Config:
         from_attributes = True
+
+class StudentProfileResponse(BaseModel):
+    student: StudentResponse
+    class_id: Optional[int]

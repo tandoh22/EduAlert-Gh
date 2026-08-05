@@ -165,3 +165,18 @@ def get_all_report_cards(
         ReportCard.term == term,
         ReportCard.year == year
     ).all()
+
+@router.delete("/{report_id}")
+def delete_report_card(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Teacher deletes a report card."""
+    report = db.query(ReportCard).filter(ReportCard.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report card not found")
+    
+    db.delete(report)
+    db.commit()
+    return {"message": "Report card deleted successfully"}

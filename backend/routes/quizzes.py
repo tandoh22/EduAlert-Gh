@@ -6,11 +6,12 @@ import httpx
 import json
 from database import get_db
 from models.quiz import Quiz, QuizQuestion, QuizAttempt, QuizAnswer
+from models.student import Student
 from schemas.quiz import (
     QuizCreate, QuizResponse, QuizQuestionCreate,
     QuizQuestionResponse, QuizSubmit, QuizAttemptResponse
 )
-from core.dependencies import require_teacher, get_current_user
+from core.dependencies import require_teacher, get_current_user, get_current_student
 from core.config import settings
 from models.user import User
 
@@ -28,6 +29,34 @@ def create_quiz(
     db.commit()
     db.refresh(quiz)
     return quiz
+
+@router.get("/teacher", response_model=List[QuizResponse])
+def get_teacher_quizzes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Get all quizzes created by the current teacher."""
+    return db.query(Quiz).filter(
+        Quiz.teacher_id == current_user.id
+    ).order_by(Quiz.created_at.desc()).all()
+
+@router.delete("/{quiz_id}")
+def delete_quiz(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Teacher deletes a quiz."""
+    quiz = db.query(Quiz).filter(
+        Quiz.id == quiz_id,
+        Quiz.teacher_id == current_user.id
+    ).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    
+    db.delete(quiz)
+    db.commit()
+    return {"message": "Quiz deleted successfully"}
 
 @router.post("/generate-questions/{quiz_id}")
 def generate_quiz_questions(
@@ -339,6 +368,17 @@ FEEDBACK: [2 sentences explaining what was correct and what was missing]
     db.refresh(attempt)
     return attempt
 
+@router.get("/my-attempts", response_model=List[QuizAttemptResponse])
+def get_my_quiz_attempts(
+    db: Session = Depends(get_db),
+    student: Student = Depends(get_current_student),
+):
+    """Completed quiz attempts for the logged-in student."""
+    return db.query(QuizAttempt).filter(
+        QuizAttempt.student_id == student.id,
+        QuizAttempt.is_completed == True,
+    ).order_by(QuizAttempt.submitted_at.desc()).all()
+
 @router.get("/class/{class_id}", response_model=List[QuizResponse])
 def get_class_quizzes(
     class_id: int,
@@ -346,10 +386,36 @@ def get_class_quizzes(
     current_user: User = Depends(get_current_user)
 ):
     """Get all published quizzes for a class — used by students."""
-    return db.query(Quiz).filter(
+    print(f"Fetching quizzes for class_id: {class_id}")
+    print(f"Current user ID: {current_user.id}")
+    
+    # Get all published quizzes for the class
+    quizzes = db.query(Quiz).filter(
         Quiz.class_id == class_id,
         Quiz.is_published == True
     ).all()
+    
+    print(f"Found {len(quizzes)} published quizzes for class {class_id}")
+    
+    # If current user is a student, filter out completed quizzes
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if student:
+        print(f"Student found: {student.id}")
+        # Get quiz IDs this student has already completed
+        completed_quiz_ids = db.query(QuizAttempt.quiz_id).filter(
+            QuizAttempt.student_id == student.id,
+            QuizAttempt.is_completed == True
+        ).all()
+        completed_ids = [q[0] for q in completed_quiz_ids]
+        print(f"Completed quiz IDs: {completed_ids}")
+        
+        # Filter out completed quizzes
+        quizzes = [q for q in quizzes if q.id not in completed_ids]
+    else:
+        print("No student found for current user")
+    
+    print(f"Returning {len(quizzes)} quizzes")
+    return quizzes
 
 @router.get("/{quiz_id}/results")
 def get_quiz_results(
