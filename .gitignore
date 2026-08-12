@@ -1,0 +1,81 @@
+<<<<<<< HEAD
+# Python bytecode and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing, coverage, and tooling caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+.hypothesis/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Local databases, uploads, and logs
+*.sqlite3
+*.db
+*.log
+logs/
+uploads/
+media/
+tmp/
+temp/
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun-debug.log*
+.bun/
+.turbo/
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+=======
+
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
