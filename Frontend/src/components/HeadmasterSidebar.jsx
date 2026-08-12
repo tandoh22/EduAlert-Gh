@@ -7,14 +7,20 @@ import {
   Users,
   Megaphone,
   GraduationCap,
+<<<<<<< HEAD
   UserCheck,
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
   LogOut,
 } from 'lucide-react';
 import { getStoredUser, logout } from '../services/authService';
 
 const headmasterNavItems = [
   { name: 'Dashboard', path: '/headmaster/dashboard', icon: LayoutGrid },
+<<<<<<< HEAD
   { name: 'Pending Accounts', path: '/headmaster/pending-accounts', icon: UserCheck },
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
   { name: 'At-Risk Students', path: '/headmaster/at-risk-students', icon: AlertTriangle },
   { name: 'Bulk Report Cards', path: '/headmaster/bulk-report-cards', icon: FileText },
   { name: 'Class Management', path: '/headmaster/class-management', icon: Users },
@@ -84,4 +90,8 @@ export default function HeadmasterSidebar() {
       </div>
     </aside>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

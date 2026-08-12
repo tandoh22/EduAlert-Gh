@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
+<<<<<<< HEAD
 import LoadingState, { EmptyState } from '../../components/LoadingState';
 import { Search, Filter, Users, GraduationCap, Plus, Edit, Trash2, X } from 'lucide-react';
 import { fetchClasses, createClass, updateClass, deleteClass } from '../../services/headmasterService';
@@ -22,12 +23,17 @@ const emptyForm = (school) => ({
   year: new Date().getFullYear(),
   school: school || '',
 });
+=======
+import { Search, Filter, Users, GraduationCap, Plus, Edit, Trash2, MoreVertical, Loader2 } from 'lucide-react';
+import EmptyState from '../../components/LoadingState';
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 
 export default function ClassManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+<<<<<<< HEAD
   const [error, setError] = useState(null);
 
   const [modalMode, setModalMode] = useState(null); // null | 'add' | 'edit'
@@ -49,6 +55,12 @@ export default function ClassManagement() {
 
   useEffect(() => {
     load();
+=======
+
+  useEffect(() => {
+    // In production, fetch real classes from API
+    setLoading(false);
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
   }, []);
 
   const filteredClasses = classes.filter(
@@ -57,6 +69,7 @@ export default function ClassManagement() {
       (selectedLevel === '' || classItem.level === selectedLevel)
   );
 
+<<<<<<< HEAD
   const openAddModal = () => {
     setModalMode('add');
     setEditingClass(null);
@@ -130,11 +143,21 @@ export default function ClassManagement() {
   if (loading) return <LoadingState />;
 
   const levelsPresent = [...new Set(classes.map((c) => c.level))];
+=======
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+      </div>
+    );
+  }
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 
   return (
     <div>
       <PageHeader title="Class Management" subtitle="Manage classes, teachers, and student assignments" />
 
+<<<<<<< HEAD
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           {error}
@@ -143,6 +166,10 @@ export default function ClassManagement() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+=======
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
         <div className="edu-card p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
@@ -150,7 +177,33 @@ export default function ClassManagement() {
             </div>
             <span className="text-sm text-slate-500">Total Classes</span>
           </div>
+<<<<<<< HEAD
           <div className="text-2xl font-bold text-slate-900">{classes.length}</div>
+=======
+          <div className="text-2xl font-bold text-slate-900">{classes.length || 0}</div>
+        </div>
+
+        <div className="edu-card p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center">
+              <Users className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-sm text-slate-500">Total Students</span>
+          </div>
+          <div className="text-2xl font-bold text-slate-900">
+            {classes.reduce((acc, c) => acc + (c.students || 0), 0) || 0}
+          </div>
+        </div>
+
+        <div className="edu-card p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-sm text-slate-500">Teachers</span>
+          </div>
+          <div className="text-2xl font-bold text-slate-900">{classes.length || 0}</div>
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
         </div>
 
         <div className="edu-card p-5">
@@ -158,9 +211,15 @@ export default function ClassManagement() {
             <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
+<<<<<<< HEAD
             <span className="text-sm text-slate-500">Levels in use</span>
           </div>
           <div className="text-2xl font-bold text-slate-900">{levelsPresent.length}</div>
+=======
+            <span className="text-sm text-slate-500">Levels</span>
+          </div>
+          <div className="text-2xl font-bold text-slate-900">0</div>
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
         </div>
       </div>
 
@@ -185,9 +244,12 @@ export default function ClassManagement() {
               className="px-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
               <option value="">All Levels</option>
+<<<<<<< HEAD
               {LEVELS.map((lvl) => (
                 <option key={lvl} value={lvl}>{lvl}</option>
               ))}
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
             </select>
 
             <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
@@ -196,10 +258,14 @@ export default function ClassManagement() {
             </button>
           </div>
 
+<<<<<<< HEAD
           <button
             onClick={openAddModal}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors"
           >
+=======
+          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors">
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
             <Plus className="w-4 h-4" />
             Add Class
           </button>
@@ -208,9 +274,13 @@ export default function ClassManagement() {
 
       {/* Classes Grid */}
       {filteredClasses.length === 0 ? (
+<<<<<<< HEAD
         <div className="edu-card">
           <EmptyState message="No classes found. Create a class to get started." />
         </div>
+=======
+        <EmptyState message="No classes found. Create classes to get started." />
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClasses.map((classItem) => (
@@ -219,6 +289,12 @@ export default function ClassManagement() {
                 <div className="w-12 h-12 rounded-xl bg-[#0A192F] flex items-center justify-center">
                   <GraduationCap className="w-6 h-6 text-white" />
                 </div>
+<<<<<<< HEAD
+=======
+                <button className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
+                  <MoreVertical className="w-4 h-4 text-slate-400" />
+                </button>
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
               </div>
 
               <h3 className="text-lg font-semibold text-slate-900 mb-1">{classItem.name}</h3>
@@ -226,6 +302,7 @@ export default function ClassManagement() {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
+<<<<<<< HEAD
                   <span className="text-sm text-slate-500">Course</span>
                   <span className="text-sm font-semibold text-slate-900">{classItem.course || '—'}</span>
                 </div>
@@ -242,10 +319,27 @@ export default function ClassManagement() {
                   <span className="text-sm font-semibold text-slate-900 truncate max-w-[160px]" title={classItem.school}>
                     {classItem.school || '—'}
                   </span>
+=======
+                  <span className="text-sm text-slate-500">Students</span>
+                  <span className="text-sm font-semibold text-slate-900">{classItem.students}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Teacher</span>
+                  <span className="text-sm font-semibold text-slate-900">{classItem.teacher}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Subjects</span>
+                  <span className="text-sm font-semibold text-slate-900">{classItem.subjects}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Room</span>
+                  <span className="text-sm font-semibold text-slate-900">{classItem.room}</span>
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
                 </div>
               </div>
 
               <div className="flex gap-2 mt-6 pt-4 border-t border-slate-200">
+<<<<<<< HEAD
                 <button
                   onClick={() => openEditModal(classItem)}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-[#0A192F] hover:bg-slate-100 rounded-lg transition-colors"
@@ -260,12 +354,22 @@ export default function ClassManagement() {
                 >
                   <Trash2 className="w-4 h-4" />
                   {deletingId === classItem.id ? 'Deleting...' : 'Delete'}
+=======
+                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-[#0A192F] hover:bg-slate-100 rounded-lg transition-colors">
+                  <Edit className="w-4 h-4" />
+                  Edit
+                </button>
+                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+<<<<<<< HEAD
 
       {/* Add / Edit modal */}
       {modalMode && (
@@ -375,3 +479,8 @@ export default function ClassManagement() {
     </div>
   );
 }
+=======
+    </div>
+  );
+}
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

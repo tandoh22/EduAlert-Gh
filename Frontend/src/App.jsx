@@ -5,9 +5,13 @@ import TeacherLayout from './components/TeacherLayout';
 import HeadmasterLayout from './components/HeadmasterLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
+<<<<<<< HEAD
 import RegisterPage from "./pages/RegisterPage";
 import Dashboard from './pages/Dashboard';
 import EnrollClass from './pages/EnrollClass';
+=======
+import Dashboard from './pages/Dashboard';
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 import Assignments from './pages/Assignments';
 import Quizzes from './pages/Quizzes';
 import StudyCards from './pages/StudyCards';
@@ -30,7 +34,10 @@ import ResourcesUpload from './pages/teacher/ResourcesUpload';
 import StudentLists from './pages/teacher/StudentLists';
 import Submissions from './pages/teacher/Submissions';
 import HeadmasterDashboard from './pages/headmaster/HeadmasterDashboard';
+<<<<<<< HEAD
 import PendingAccounts from './pages/headmaster/PendingAccounts';
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 import AtRiskStudents from './pages/headmaster/AtRiskStudents';
 import BulkReportCards from './pages/headmaster/BulkReportCards';
 import ClassManagement from './pages/headmaster/ClassManagement';
@@ -42,8 +49,11 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Login />} />
 
+<<<<<<< HEAD
         <Route path="/register" element={<RegisterPage />} />
         
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
         <Route
           path="/dashboard"
           element={
@@ -55,6 +65,7 @@ export default function App() {
           }
         />
         <Route
+<<<<<<< HEAD
           path="/enroll-class"
           element={
             <ProtectedRoute>
@@ -65,6 +76,8 @@ export default function App() {
           }
         />
         <Route
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
           path="/assignments"
           element={
             <ProtectedRoute>
@@ -289,6 +302,7 @@ export default function App() {
           }
         />
         <Route
+<<<<<<< HEAD
           path="/headmaster/pending-accounts"
           element={
             <ProtectedRoute>
@@ -299,6 +313,8 @@ export default function App() {
           }
         />
         <Route
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
           path="/headmaster/at-risk-students"
           element={
             <ProtectedRoute>
@@ -343,4 +359,8 @@ export default function App() {
       </Routes>
     </BrowserRouter>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

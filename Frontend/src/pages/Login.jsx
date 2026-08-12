@@ -1,4 +1,5 @@
 import { useState } from "react";
+<<<<<<< HEAD
 import { useNavigate, Link } from "react-router-dom";
 import { Mail, Lock, GraduationCap } from "lucide-react";
 import { loginUser } from "../services/authService";
@@ -26,6 +27,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("student");
+=======
+import { useNavigate } from "react-router-dom";
+import { Mail, Lock, GraduationCap } from "lucide-react";
+import { loginUser } from "../services/authService";
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +47,7 @@ export default function LoginPage() {
     setError("");
 
     try {
+<<<<<<< HEAD
       const response = await loginUser({ email, password, role });
       const userRole = response.user.role || role;
 
@@ -50,11 +61,26 @@ export default function LoginPage() {
       }
     } catch (err) {
       setError(getErrorMessage(err));
+=======
+      const response = await loginUser({ email, password });
+      
+      // Redirect based on user role
+      if (response.user.role === "student") {
+        navigate("/dashboard");
+      } else if (response.user.role === "teacher") {
+        navigate("/teacher/dashboard");
+      } else if (response.user.role === "admin" || response.user.role === "headmaster") {
+        navigate("/headmaster/dashboard");
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || "Login failed. Please check your credentials.");
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
     } finally {
       setLoading(false);
     }
   };
 
+<<<<<<< HEAD
   const emailPlaceholder =
     role === "teacher"
       ? "teacher@edualert.gh"
@@ -62,6 +88,8 @@ export default function LoginPage() {
       ? "admin@edualert.gh"
       : "student@edualert.gh";
 
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
   return (
     <div className="w-full min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-xl border border-slate-200">
@@ -129,10 +157,22 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+<<<<<<< HEAD
                     placeholder={emailPlaceholder}
                     className="w-full pl-10 pr-3.5 py-3 text-sm border border-slate-200 rounded-lg bg-white text-slate-900 placeholder-slate-400 outline-none focus:border-blue-800 focus:ring-4 focus:ring-blue-800/10 transition"
                   />
                 </div>
+=======
+                    placeholder="student@edualert.gh"
+                    className="w-full pl-10 pr-3.5 py-3 text-sm border border-slate-200 rounded-lg bg-white text-slate-900 placeholder-slate-400 outline-none focus:border-blue-800 focus:ring-4 focus:ring-blue-800/10 transition"
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Tip: try <b className="text-slate-600 font-semibold">student@...</b>,{" "}
+                  <b className="text-slate-600 font-semibold">teacher@...</b>, or{" "}
+                  <b className="text-slate-600 font-semibold">admin@...</b>
+                </p>
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
               </div>
 
               <div className="mb-4">
@@ -154,6 +194,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
+<<<<<<< HEAD
               {/* Role selector */}
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-slate-900 mb-2">I am a...</label>
@@ -176,6 +217,8 @@ export default function LoginPage() {
                 </div>
               </div>
 
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
               <div className="flex items-center justify-between text-sm mb-6 mt-1">
                 <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
                   <input
@@ -208,9 +251,15 @@ export default function LoginPage() {
 
             <div className="text-center text-sm text-slate-600 mt-5">
               New here?{" "}
+<<<<<<< HEAD
               <Link to="/register" className="text-blue-900 font-semibold hover:underline">
                 Create an account
               </Link>
+=======
+              <a href="#" className="text-blue-900 font-semibold hover:underline">
+                Create an account
+              </a>
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
             </div>
           </div>
         </div>

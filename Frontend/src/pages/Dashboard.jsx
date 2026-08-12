@@ -74,6 +74,7 @@ export default function Dashboard() {
   if (profileLoading || loading) return <LoadingState />;
   if (profileError) return <ErrorState message={profileError} />;
   if (error) return <ErrorState message={error} />;
+<<<<<<< HEAD
   if (!classId) {
     return (
       <div>
@@ -90,6 +91,9 @@ export default function Dashboard() {
       </div>
     );
   }
+=======
+  if (!classId) return <EmptyState message="No class enrollment found for your account." />;
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 
   return (
     <div>
@@ -161,4 +165,8 @@ export default function Dashboard() {
       </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

@@ -2,10 +2,13 @@ import api from './api';
 
 export const fetchMyProfile = () => api.get('/students/me');
 
+<<<<<<< HEAD
 export const fetchClasses = () => api.get('/classes/');
 
 export const selfEnrollClass = (classId) => api.post('/students/enroll', { class_id: classId });
 
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 export const fetchClassAssignments = (classId) =>
   api.get(`/assignments/class/${classId}`);
 
@@ -59,4 +62,8 @@ export const fetchQuiz = (quizId) => api.get(`/quizzes/${quizId}`);
 
 export const runPrediction = (studentId) => api.post(`/predictions/run/${studentId}`);
 
+<<<<<<< HEAD
 export const recordAttendance = (payload) => api.post('/attendance/', payload);
+=======
+export const recordAttendance = (payload) => api.post('/attendance/', payload);
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

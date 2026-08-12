@@ -7,9 +7,14 @@ from datetime import date, timedelta, datetime
 from database import SessionLocal, engine, Base
 from models.all_models import (
     User, Student, Score, Attendance, Prediction,
+<<<<<<< HEAD
     Class, Enrollment, TeacherAssignment, Assignment, Submission,
     Quiz, QuizQuestion, QuizAttempt, QuizAnswer,
     LessonNote, StudyCardSet, Resource, Announcement, ReportCard
+=======
+    Class, Enrollment, Assignment, Submission,
+    Quiz, QuizQuestion, LessonNote, Announcement, Resource
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 )
 from core.security import hash_password
 
@@ -19,6 +24,7 @@ db = SessionLocal()
 
 print("Seeding EduAlert GH database...\n")
 
+<<<<<<< HEAD
 # Clear existing tables for clean seed run if needed
 db.query(QuizAnswer).delete()
 db.query(QuizAttempt).delete()
@@ -42,6 +48,9 @@ db.query(User).delete()
 db.commit()
 
 # 1. USERS — Teacher, Headmaster, and Student accounts
+=======
+# 1. USERS — Teacher and Headmaster accounts
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 teacher = User(
     full_name="Mr. Kofi Mensah",
     email="teacher@edualert.gh",
@@ -62,6 +71,7 @@ headmaster = User(
     school="Achimota Senior High School"
 )
 db.add(headmaster)
+<<<<<<< HEAD
 
 student_user = User(
     full_name="Kwame Mensah",
@@ -70,9 +80,32 @@ student_user = User(
     role="student",
     status="approved",
     school="Achimota Senior High School"
+=======
+db.commit()
+print("Users created (teacher + headmaster)")
+
+student_user = User(
+    full_name="Ama Boateng",
+    email="student@edualert.gh",
+    password_hash=hash_password("password123"),
+    role="student",
+    school="Accra Academy"
 )
 db.add(student_user)
 db.commit()
+print("Student login account created")
+
+# 2. CLASS — Create a sample class
+class_3b = Class(
+    name="JHS 3B",
+    level="JHS",
+    year=2025,
+    school="Accra Academy"
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
+)
+db.add(student_user)
+db.commit()
+<<<<<<< HEAD
 db.refresh(teacher)
 db.refresh(headmaster)
 db.refresh(student_user)
@@ -103,6 +136,11 @@ db.commit()
 print("[OK] Teacher assigned to Form 2 Science A")
 
 # 3. STUDENTS
+=======
+print("Class created (JHS 3B)")
+
+# 3. STUDENTS — Create sample students
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 student_names = [
     ("Kwame Mensah", "M", student_user.id),
     ("Akosua Frimpong", "F", None),
@@ -131,6 +169,7 @@ for i, (name, gender, u_id) in enumerate(student_names):
     students.append(s)
 db.commit()
 
+<<<<<<< HEAD
 for s in students:
     db.refresh(s)
 
@@ -138,6 +177,13 @@ print(f"[OK] {len(students)} students created (Kwame Mensah linked to student@ed
 
 # 4. ENROLLMENTS
 subjects = ["Biology", "Chemistry", "Physics", "Core Maths", "Elective Maths", "English", "Science"]
+=======
+students[1].user_id = student_user.id
+db.commit()
+print(f"{len(students)} students created")
+
+# 4. ENROLLMENT — Enroll all students into the class
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 for student in students:
     for subject in subjects:
         db.add(Enrollment(
@@ -148,9 +194,16 @@ for student in students:
             year=2025
         ))
 db.commit()
+<<<<<<< HEAD
 print(f"[OK] Students enrolled in {len(subjects)} subjects")
 
 # 5. SCORES (including at-risk students like Akosua & Kojo)
+=======
+print(f"{len(students)} students enrolled in JHS 3B")
+
+# 5. SCORES — Some students will look at-risk on purpose
+subjects = ["Mathematics", "English", "Science", "Social Studies", "ICT"]
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 for i, student in enumerate(students):
     # Akosua (index 1) & Kojo (index 4) are at-risk with low scores
     if i in [1, 4]:
@@ -172,9 +225,15 @@ for i, student in enumerate(students):
                 exam_type="Mid Term" if term == "Term 1" else "End of Term"
             ))
 db.commit()
+<<<<<<< HEAD
 print("[OK] Historical scores added")
 
 # 6. ATTENDANCE (60 days)
+=======
+print("Scores recorded for all students (5 subjects x 2 terms)")
+
+# 6. ATTENDANCE — First 3 students have low attendance
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 start_date = date(2025, 1, 6)
 for i, student in enumerate(students):
     presence_prob = 0.62 if i in [1, 4] else 0.94
@@ -191,6 +250,7 @@ for i, student in enumerate(students):
             year=2025,
         ))
 db.commit()
+<<<<<<< HEAD
 print("[OK] Attendance logs added")
 
 # 7. PREDICTIONS (Early warning system results)
@@ -235,6 +295,11 @@ db.commit()
 print("[OK] AI Risk predictions seeded")
 
 # 8. ASSIGNMENT & SUBMISSION
+=======
+print("Attendance records created (60 school days)")
+
+# 7. ASSIGNMENT — Create a sample assignment with one submission
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 assignment = Assignment(
     title="Photosynthesis Lab Report & Diagram Analysis",
     description="Explain the light-dependent and light-independent reactions of photosynthesis. Draw the Calvin cycle diagram and answer questions 1-5.",
@@ -247,6 +312,7 @@ db.add(assignment)
 db.commit()
 db.refresh(assignment)
 
+<<<<<<< HEAD
 sub = Submission(
     assignment_id=assignment.id,
     student_id=students[0].id, # Kwame Mensah
@@ -254,12 +320,24 @@ sub = Submission(
     ai_feedback="Clear understanding of light reactions vs Calvin cycle. Great explanation of thylakoid membrane and stroma locations. Consider elaborating on RuBisCO enzyme role.",
     ai_score=88,
     teacher_score=90
+=======
+submission = Submission(
+    assignment_id=assignment.id,
+    student_id=students[5].id,
+    answer_text="1) x = 5  2) x = -3  3) x = 12  4) x = 7  5) x = -1 6) x = 9  7) x = 0  8) x = 4  9) x = -8  10) x = 6",
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 )
 db.add(sub)
 db.commit()
+<<<<<<< HEAD
 print("[OK] Assignment and submission created")
 
 # 9. QUIZZES & QUESTIONS
+=======
+print("Sample assignment created with 1 submission")
+
+# 8. QUIZ — Create a sample quiz with questions
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 quiz = Quiz(
     title="Cell Biology Quick Check",
     subject="Biology",
@@ -274,6 +352,7 @@ db.add(quiz)
 db.commit()
 db.refresh(quiz)
 
+<<<<<<< HEAD
 q1 = QuizQuestion(
     quiz_id=quiz.id,
     question_text="Which organelle is known as the powerhouse of the cell?",
@@ -281,6 +360,46 @@ q1 = QuizQuestion(
     option_a="Nucleus", option_b="Mitochondria", option_c="Ribosome", option_d="Golgi Apparatus",
     correct_answer="B",
     marks=1, order_num=1
+=======
+sample_questions = [
+    {
+        "question_text": "What is the value of x in 2x + 4 = 10?",
+        "question_type": "mcq",
+        "option_a": "2", "option_b": "3", "option_c": "4", "option_d": "5",
+        "correct_answer": "B",
+        "marks": 1, "order_num": 1
+    },
+    {
+        "question_text": "True or False: A linear equation always has degree 1.",
+        "question_type": "true_false",
+        "option_a": "True", "option_b": "False",
+        "correct_answer": "True",
+        "marks": 1, "order_num": 2
+    },
+    {
+        "question_text": "Explain what it means to 'solve' a linear equation.",
+        "question_type": "short_answer",
+        "correct_answer": "Finding the value of the unknown variable that makes the equation true.",
+        "marks": 3, "order_num": 3
+    },
+]
+
+for q in sample_questions:
+    db.add(QuizQuestion(quiz_id=quiz.id, **q))
+db.commit()
+print(f"Sample quiz created with {len(sample_questions)} questions")
+
+# 9. LESSON NOTE — Sample AI-style lesson note
+lesson_note = LessonNote(
+    title="Mathematics — Linear Equations",
+    subject="Mathematics",
+    topic="Linear Equations",
+    class_level="JHS 3",
+    content="LESSON NOTE\nSubject: Mathematics | Topic: Linear Equations | Class: JHS 3\n\nLEARNING OBJECTIVES\n1. Define a linear equation\n2. Solve simple linear equations in one variable\n3. Apply linear equations to real-life word problems",
+    teacher_id=teacher.id,
+    is_shared=True,
+    source_file=None
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 )
 q2 = QuizQuestion(
     quiz_id=quiz.id,
@@ -299,6 +418,7 @@ q3 = QuizQuestion(
 )
 db.add_all([q1, q2, q3])
 db.commit()
+<<<<<<< HEAD
 print("[OK] Sample quiz with 3 questions created")
 
 # 10. LESSON NOTES
@@ -373,6 +493,14 @@ print("[OK] Learning resource created")
 a1 = Announcement(
     title="Mid-term Exams Begin Next Monday",
     body="All Form 2 students should report to the exam hall by 7:45 AM. Ensure you bring your government-issued ID cards and student tablets.",
+=======
+print("Sample lesson note created and shared with students")
+
+# 10. ANNOUNCEMENT — Sample school-wide and class announcements
+schoolwide_announcement = Announcement(
+    title="Mid-Term Exams Schedule Released",
+    body="Mid-term examinations will run from March 24th to March 28th. Please check the notice board for your timetable.",
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
     author_id=headmaster.id,
     is_schoolwide=True
 )
@@ -385,6 +513,7 @@ a2 = Announcement(
 )
 db.add_all([a1, a2])
 db.commit()
+<<<<<<< HEAD
 print("[OK] Announcements created")
 
 # 14. REPORT CARD
@@ -412,3 +541,40 @@ print("  Student   -> student@edualert.gh / password123")
 print("  Teacher   -> teacher@edualert.gh / password123")
 print("  Headmaster-> admin@edualert.gh   / password123")
 print("==================================================")
+=======
+print("2 announcements created (1 school-wide, 1 class-specific)")
+
+resources = [
+    Resource(
+        title="WASSCE Mathematics Past Questions",
+        description="Past WASSCE questions from 2015 to 2024 with worked solutions.",
+        subject="Mathematics",
+        class_level="JHS",
+        file_url="/resources/wassce-maths.pdf",
+        file_type="PDF",
+        uploaded_by=teacher.id,
+        ai_summary="Covers algebra, geometry, and statistics with past WASSCE questions.",
+    ),
+    Resource(
+        title="Science Practical Guide",
+        description="Laboratory safety and practical procedures for JHS science.",
+        subject="Science",
+        class_level="JHS",
+        file_url="/resources/science-practical.pdf",
+        file_type="PDF",
+        uploaded_by=teacher.id,
+        ai_summary="Step-by-step guide to common JHS science practical experiments.",
+    ),
+]
+for resource in resources:
+    db.add(resource)
+db.commit()
+print(f"{len(resources)} resources created")
+
+db.close()
+print("DATABASE SEEDING COMPLETE")
+print("\nTest accounts:")
+print("  Teacher:   teacher@edualert.gh / password123")
+print("  Admin:     admin@edualert.gh / password123")
+print("  Student:   student@edualert.gh / password123")
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

@@ -7,12 +7,18 @@ import {
   Calendar,
   FileText,
   Megaphone,
+<<<<<<< HEAD
   UserCheck,
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
   Loader2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import EmptyState from '../../components/LoadingState';
+<<<<<<< HEAD
 import { fetchPendingUsers } from '../../services/headmasterService';
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 
 export default function HeadmasterDashboard() {
   const [stats, setStats] = useState({
@@ -22,6 +28,7 @@ export default function HeadmasterDashboard() {
     attendanceRate: 0,
   });
   const [loading, setLoading] = useState(true);
+<<<<<<< HEAD
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
@@ -33,6 +40,15 @@ export default function HeadmasterDashboard() {
 
   const quickActions = [
     { label: 'Review Pending Accounts', icon: UserCheck, path: '/headmaster/pending-accounts', badge: pendingCount },
+=======
+
+  useEffect(() => {
+    // In production, fetch real stats from API
+    setLoading(false);
+  }, []);
+
+  const quickActions = [
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
     { label: 'View At-Risk Students', icon: AlertTriangle, path: '/headmaster/at-risk-students' },
     { label: 'Class Management', icon: Users, path: '/headmaster/class-management' },
     { label: 'Generate Report Cards', icon: FileText, path: '/headmaster/bulk-report-cards' },
@@ -83,12 +99,17 @@ export default function HeadmasterDashboard() {
                 <Link
                   key={action.label}
                   to={action.path}
+<<<<<<< HEAD
                   className="edu-card p-5 flex items-center gap-4 hover:shadow-lg transition-shadow text-left relative"
+=======
+                  className="edu-card p-5 flex items-center gap-4 hover:shadow-lg transition-shadow text-left"
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
                 >
                   <div className="w-12 h-12 rounded-xl bg-[#0A192F] flex items-center justify-center flex-shrink-0">
                     <Icon className="w-6 h-6 text-white" />
                   </div>
                   <div>
+<<<<<<< HEAD
                     <div className="font-semibold text-slate-900 flex items-center gap-2">
                       {action.label}
                       {!!action.badge && (
@@ -97,6 +118,9 @@ export default function HeadmasterDashboard() {
                         </span>
                       )}
                     </div>
+=======
+                    <div className="font-semibold text-slate-900">{action.label}</div>
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
                     <div className="text-sm text-slate-500">Click to proceed</div>
                   </div>
                 </Link>
@@ -133,4 +157,8 @@ export default function HeadmasterDashboard() {
       </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

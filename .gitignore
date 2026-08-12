@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python bytecode and build artifacts
 __pycache__/
 *.py[cod]
@@ -75,3 +76,6 @@ bun-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+=======
+
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

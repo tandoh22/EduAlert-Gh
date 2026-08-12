@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -15,4 +15,8 @@ class User(Base):
     subject       = Column(String, nullable=True)
     school        = Column(String, nullable=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
+<<<<<<< HEAD
     students      = relationship("Student", back_populates="teacher", foreign_keys="[Student.teacher_id]")
+=======
+    students      = relationship("Student", back_populates="teacher", foreign_keys="Student.teacher_id")
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

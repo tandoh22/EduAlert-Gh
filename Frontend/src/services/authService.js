@@ -7,11 +7,14 @@ export const loginUser = async (credentials) => {
   return response.data;
 };
 
+<<<<<<< HEAD
 export const registerUser = async (data) => {
   const response = await api.post('/auth/register', data);
   return response.data;
 };
 
+=======
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
 export const getStoredUser = () => {
   const raw = localStorage.getItem('edualert_user');
   return raw ? JSON.parse(raw) : null;
@@ -32,4 +35,8 @@ export const logout = () => {
   localStorage.removeItem('edualert_token');
   localStorage.removeItem('edualert_user');
   localStorage.removeItem('edualert_student_profile');
+<<<<<<< HEAD
 };
+=======
+};
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af

@@ -149,6 +149,7 @@ def get_all_report_cards(
         ReportCard.year == year
     ).all()
 
+<<<<<<< HEAD
 @router.get("/{report_id}/pdf")
 def download_report_card_pdf(
     report_id: int,
@@ -258,3 +259,19 @@ def download_report_card_pdf(
     doc.build(story)
     buffer.seek(0)
     return Response(content=buffer.getvalue(), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=ReportCard_{report_id}.pdf"})
+=======
+@router.delete("/{report_id}")
+def delete_report_card(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Teacher deletes a report card."""
+    report = db.query(ReportCard).filter(ReportCard.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report card not found")
+    
+    db.delete(report)
+    db.commit()
+    return {"message": "Report card deleted successfully"}
+>>>>>>> c3591ca2c3b5ebf5102d4e9b8992579eef0282af
