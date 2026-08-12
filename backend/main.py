@@ -1,19 +1,20 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from routes import (
     auth, students, scores, attendance,
     predictions, admin, classes, assignments,
     quizzes, lesson_notes, study_cards,
-    resources, announcements, report_cards
+    resources, announcements, report_cards,
+    teacher
 )
 from database import engine, Base
-import models.all_models
+from models import all_models
+from routes import classes
 
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="EduAlert GH API",
-    description="AI-Powered School Management System for Ghanaian JHS/SHS Schools",
+    description="AI-Powered School Management System for Ghanaian Senior High Schools",
     version="2.0.0"
 )
 
@@ -39,6 +40,10 @@ app.include_router(study_cards.router,   prefix="/api/study-cards",   tags=["Stu
 app.include_router(resources.router,     prefix="/api/resources",     tags=["Resources"])
 app.include_router(announcements.router, prefix="/api/announcements", tags=["Announcements"])
 app.include_router(report_cards.router,  prefix="/api/report-cards",  tags=["Report Cards"])
+app.include_router(teacher.router,       prefix="/api/teacher",       tags=["Teacher Dashboard"])
+app.include_router(classes.router,       prefix="/classes",           tags=["Classes"])
+
+Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 def root():

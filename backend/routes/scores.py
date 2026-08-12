@@ -5,10 +5,18 @@ from database import get_db
 from models.score import Score
 from models.student import Student
 from schemas.score import ScoreCreate, ScoreResponse
-from core.dependencies import require_teacher
+from core.dependencies import require_teacher, get_current_student
 from models.user import User
 
 router = APIRouter()
+
+@router.get("/me", response_model=List[ScoreResponse])
+def get_my_scores(
+    db: Session = Depends(get_db),
+    student: Student = Depends(get_current_student),
+):
+    """Return the logged-in student's own scores."""
+    return db.query(Score).filter(Score.student_id == student.id).all()
 
 @router.post("/", response_model=ScoreResponse, status_code=201)
 def record_score(data: ScoreCreate, db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):

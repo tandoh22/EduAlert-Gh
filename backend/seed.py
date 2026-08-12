@@ -1,35 +1,55 @@
 """
 Seed script — populates the database with sample data for testing.
 Run this once after setting up: python seed.py
-
-⚠️ This is a DEVELOPMENT TOOL only. Real schools will create their
-own data through the actual frontend application, not this script.
 """
+import random
+from datetime import date, timedelta, datetime
 from database import SessionLocal, engine, Base
 from models.all_models import (
     User, Student, Score, Attendance, Prediction,
-    Class, Enrollment, Assignment, Submission,
-    Quiz, QuizQuestion, LessonNote, Announcement
+    Class, Enrollment, TeacherAssignment, Assignment, Submission,
+    Quiz, QuizQuestion, QuizAttempt, QuizAnswer,
+    LessonNote, StudyCardSet, Resource, Announcement, ReportCard
 )
 from core.security import hash_password
-from datetime import date, timedelta, datetime
-import random
 
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
-print("🌱 Seeding EduAlert GH database...\n")
+print("Seeding EduAlert GH database...\n")
 
-# ─────────────────────────────────────────────────────────────
-# 1. USERS — Teacher and Headmaster accounts
-# ─────────────────────────────────────────────────────────────
+# Clear existing tables for clean seed run if needed
+db.query(QuizAnswer).delete()
+db.query(QuizAttempt).delete()
+db.query(QuizQuestion).delete()
+db.query(Quiz).delete()
+db.query(Submission).delete()
+db.query(Assignment).delete()
+db.query(LessonNote).delete()
+db.query(StudyCardSet).delete()
+db.query(Resource).delete()
+db.query(Announcement).delete()
+db.query(ReportCard).delete()
+db.query(Prediction).delete()
+db.query(Score).delete()
+db.query(Attendance).delete()
+db.query(TeacherAssignment).delete()
+db.query(Enrollment).delete()
+db.query(Student).delete()
+db.query(Class).delete()
+db.query(User).delete()
+db.commit()
+
+# 1. USERS — Teacher, Headmaster, and Student accounts
 teacher = User(
     full_name="Mr. Kofi Mensah",
     email="teacher@edualert.gh",
     password_hash=hash_password("password123"),
     role="teacher",
+    status="approved",
     subject="Mathematics",
-    school="Accra Academy"
+    school="Achimota Senior High School"
 )
 db.add(teacher)
 
@@ -38,92 +58,127 @@ headmaster = User(
     email="admin@edualert.gh",
     password_hash=hash_password("password123"),
     role="admin",
-    school="Accra Academy"
+    status="approved",
+    school="Achimota Senior High School"
 )
 db.add(headmaster)
-db.commit()
-print("✅ Users created (teacher + headmaster)")
 
-# ─────────────────────────────────────────────────────────────
-# 2. CLASS — Create a sample class
-# ─────────────────────────────────────────────────────────────
-class_3b = Class(
-    name="JHS 3B",
-    level="JHS",
-    year=2025,
-    school="Accra Academy"
+student_user = User(
+    full_name="Kwame Mensah",
+    email="student@edualert.gh",
+    password_hash=hash_password("password123"),
+    role="student",
+    status="approved",
+    school="Achimota Senior High School"
 )
-db.add(class_3b)
+db.add(student_user)
 db.commit()
-print("✅ Class created (JHS 3B)")
+db.refresh(teacher)
+db.refresh(headmaster)
+db.refresh(student_user)
 
-# ─────────────────────────────────────────────────────────────
-# 3. STUDENTS — Create sample students
-# ─────────────────────────────────────────────────────────────
+print("[OK] Users created (teacher, headmaster, student)")
+
+# 2. CLASS
+class_2a = Class(
+    name="Form 2 Science A",
+    level="SHS",
+    course="Science 1",
+    year=2025,
+    school="Achimota Senior High School"
+)
+db.add(class_2a)
+db.commit()
+db.refresh(class_2a)
+print("[OK] Class created (Form 2 Science A)")
+
+db.add(TeacherAssignment(
+    teacher_id=teacher.id,
+    class_id=class_2a.id,
+    subject=teacher.subject,
+    term="Term 2",
+    year=2025
+))
+db.commit()
+print("[OK] Teacher assigned to Form 2 Science A")
+
+# 3. STUDENTS
 student_names = [
-    ("Kwame Asante", "M"), ("Ama Boateng", "F"), ("Yaw Darko", "M"),
-    ("Akosua Frimpong", "F"), ("Kojo Appiah", "M"), ("Efua Mensah", "F"),
-    ("Kwesi Owusu", "M"), ("Adwoa Ntim", "F"), ("Fiifi Agyei", "M"),
-    ("Abena Kyei", "F"),
+    ("Kwame Mensah", "M", student_user.id),
+    ("Akosua Frimpong", "F", None),
+    ("Yaw Darko", "M", None),
+    ("Efua Sarpong", "F", None),
+    ("Kojo Antwi", "M", None),
+    ("Adjoa Boateng", "F", None),
+    ("Kwesi Owusu", "M", None),
+    ("Ama Eduful", "F", None),
+    ("Fiifi Agyei", "M", None),
+    ("Abena Kyei", "F", None),
 ]
 
 students = []
-for i, (name, gender) in enumerate(student_names):
+for i, (name, gender, u_id) in enumerate(student_names):
     s = Student(
         full_name=name,
-        student_id=f"ACC2025{i+1:03d}",
-        class_name="JHS 3B",
+        student_id=f"ACH2025{i+1:03d}",
+        class_name="Form 2 Science A",
         gender=gender,
         teacher_id=teacher.id,
-        school="Accra Academy"
+        user_id=u_id,
+        school="Achimota Senior High School"
     )
     db.add(s)
     students.append(s)
 db.commit()
-print(f"✅ {len(students)} students created")
 
-# ─────────────────────────────────────────────────────────────
-# 4. ENROLLMENT — Enroll all students into the class
-# ─────────────────────────────────────────────────────────────
+for s in students:
+    db.refresh(s)
+
+print(f"[OK] {len(students)} students created (Kwame Mensah linked to student@edualert.gh)")
+
+# 4. ENROLLMENTS
+subjects = ["Biology", "Chemistry", "Physics", "Core Maths", "Elective Maths", "English", "Science"]
 for student in students:
-    enrollment = Enrollment(
-        student_id=student.id,
-        class_id=class_3b.id,
-        subject="Mathematics",
-        term="Term 1",
-        year=2025
-    )
-    db.add(enrollment)
+    for subject in subjects:
+        db.add(Enrollment(
+            student_id=student.id,
+            class_id=class_2a.id,
+            subject=subject,
+            term="Term 2",
+            year=2025
+        ))
 db.commit()
-print(f"✅ {len(students)} students enrolled in JHS 3B")
+print(f"[OK] Students enrolled in {len(subjects)} subjects")
 
-# ─────────────────────────────────────────────────────────────
-# 5. SCORES — Some students will look at-risk on purpose
-# ─────────────────────────────────────────────────────────────
-subjects = ["Mathematics", "English", "Science", "Social Studies", "ICT"]
+# 5. SCORES (including at-risk students like Akosua & Kojo)
 for i, student in enumerate(students):
-    base_score = 35 if i < 3 else (55 if i < 6 else 75)
+    # Akosua (index 1) & Kojo (index 4) are at-risk with low scores
+    if i in [1, 4]:
+        base = 42
+    elif i in [2]:
+        base = 65
+    else:
+        base = 80
+
     for subject in subjects:
         for term in ["Term 1", "Term 2"]:
-            score_val = max(10, min(100, base_score + random.randint(-15, 15)))
+            score_val = max(15, min(100, base + random.randint(-12, 12)))
             db.add(Score(
                 student_id=student.id,
                 subject=subject,
                 score=score_val,
                 term=term,
                 year=2025,
-                exam_type="End of Term"
+                exam_type="Mid Term" if term == "Term 1" else "End of Term"
             ))
 db.commit()
-print("✅ Scores recorded for all students (5 subjects x 2 terms)")
+print("[OK] Historical scores added")
 
-# ─────────────────────────────────────────────────────────────
-# 6. ATTENDANCE — First 3 students have low attendance
-# ─────────────────────────────────────────────────────────────
+# 6. ATTENDANCE (60 days)
 start_date = date(2025, 1, 6)
 for i, student in enumerate(students):
-    presence_prob = 0.5 if i < 3 else 0.85
-    for day_offset in range(60):
+    presence_prob = 0.62 if i in [1, 4] else 0.94
+    for day_offset in range(40):
         school_day = start_date + timedelta(days=day_offset)
         if school_day.weekday() >= 5:
             continue
@@ -132,148 +187,228 @@ for i, student in enumerate(students):
             student_id=student.id,
             date=school_day,
             status=status,
-            term="Term 1",
+            term="Term 2",
             year=2025,
         ))
 db.commit()
-print("✅ Attendance records created (60 school days)")
+print("[OK] Attendance logs added")
 
-# ─────────────────────────────────────────────────────────────
-# 7. ASSIGNMENT — Create a sample assignment with one submission
-# ─────────────────────────────────────────────────────────────
+# 7. PREDICTIONS (Early warning system results)
+p1 = Prediction(
+    student_id=students[1].id, # Akosua
+    risk_level="High",
+    confidence_score=0.91,
+    reason="Low attendance (74%), declining Chemistry & Physics scores (<50%)",
+    ai_suggestion="Akosua Frimpong is missing core science lessons. Recommend scheduling a 20-min catch-up session on redox reactions and contacting parent/guardian.",
+    term="Term 2",
+    year=2025
+)
+p2 = Prediction(
+    student_id=students[4].id, # Kojo
+    risk_level="High",
+    confidence_score=0.88,
+    reason="Very low attendance (62%), failed 3 subjects",
+    ai_suggestion="Kojo Antwi hasn't submitted the last 4 assignments. Recommend contacting guardian and arranging after-school remedial tutoring.",
+    term="Term 2",
+    year=2025
+)
+p3 = Prediction(
+    student_id=students[2].id, # Yaw Darko
+    risk_level="Medium",
+    confidence_score=0.68,
+    reason="Slight downward score trend in Mathematics",
+    ai_suggestion="Yaw Darko is experiencing a slight score drop in Core Maths. Monitor closely in class and provide extra practice problems.",
+    term="Term 2",
+    year=2025
+)
+p4 = Prediction(
+    student_id=students[0].id, # Kwame
+    risk_level="Low",
+    confidence_score=0.95,
+    reason="High attendance (96%), excellent average score (82%)",
+    ai_suggestion="Kwame Mensah is performing strongly. Encourage him to assist peers as a study mentor.",
+    term="Term 2",
+    year=2025
+)
+db.add_all([p1, p2, p3, p4])
+db.commit()
+print("[OK] AI Risk predictions seeded")
+
+# 8. ASSIGNMENT & SUBMISSION
 assignment = Assignment(
-    title="Solving Linear Equations",
-    description="Solve the 10 linear equations on page 45 of your Mathematics textbook. Show all working clearly.",
-    subject="Mathematics",
-    due_date=date(2025, 3, 15),
-    class_id=class_3b.id,
+    title="Photosynthesis Lab Report & Diagram Analysis",
+    description="Explain the light-dependent and light-independent reactions of photosynthesis. Draw the Calvin cycle diagram and answer questions 1-5.",
+    subject="Biology",
+    due_date=date(2025, 7, 30),
+    class_id=class_2a.id,
     teacher_id=teacher.id
 )
 db.add(assignment)
 db.commit()
+db.refresh(assignment)
 
-# One student submits their work
-submission = Submission(
+sub = Submission(
     assignment_id=assignment.id,
-    student_id=students[5].id,   # Efua Mensah submits
-    answer_text=(
-        "1) x = 5  2) x = -3  3) x = 12  4) x = 7  5) x = -1 "
-        "6) x = 9  7) x = 0  8) x = 4  9) x = -8  10) x = 6"
-    ),
+    student_id=students[0].id, # Kwame Mensah
+    answer_text="Photosynthesis consists of light-dependent reactions taking place in the thylakoid membrane where light splits water releasing oxygen, ATP and NADPH. The Calvin cycle occurs in the stroma where ATP and NADPH fix carbon dioxide into G3P to produce glucose.",
+    ai_feedback="Clear understanding of light reactions vs Calvin cycle. Great explanation of thylakoid membrane and stroma locations. Consider elaborating on RuBisCO enzyme role.",
+    ai_score=88,
+    teacher_score=90
 )
-db.add(submission)
+db.add(sub)
 db.commit()
-print("✅ Sample assignment created with 1 submission")
+print("[OK] Assignment and submission created")
 
-# ─────────────────────────────────────────────────────────────
-# 8. QUIZ — Create a sample quiz with questions
-# ─────────────────────────────────────────────────────────────
+# 9. QUIZZES & QUESTIONS
 quiz = Quiz(
-    title="Algebra Basics Quiz",
-    subject="Mathematics",
-    topic="Linear Equations",
-    class_id=class_3b.id,
+    title="Cell Biology Quick Check",
+    subject="Biology",
+    topic="Cell Structure & Organelles",
+    class_id=class_2a.id,
     teacher_id=teacher.id,
-    time_limit=20,
+    time_limit=15,
     is_published=True,
-    due_date=datetime(2025, 3, 20, 14, 0)
+    due_date=datetime(2025, 8, 5, 14, 0)
 )
 db.add(quiz)
 db.commit()
+db.refresh(quiz)
 
-sample_questions = [
-    {
-        "question_text": "What is the value of x in 2x + 4 = 10?",
-        "question_type": "mcq",
-        "option_a": "2", "option_b": "3", "option_c": "4", "option_d": "5",
-        "correct_answer": "B",
-        "marks": 1, "order_num": 1
-    },
-    {
-        "question_text": "True or False: A linear equation always has degree 1.",
-        "question_type": "true_false",
-        "option_a": "True", "option_b": "False",
-        "correct_answer": "True",
-        "marks": 1, "order_num": 2
-    },
-    {
-        "question_text": "Explain what it means to 'solve' a linear equation.",
-        "question_type": "short_answer",
-        "correct_answer": "Finding the value of the unknown variable that makes the equation true.",
-        "marks": 3, "order_num": 3
-    },
-]
-
-for q in sample_questions:
-    db.add(QuizQuestion(quiz_id=quiz.id, **q))
-db.commit()
-print(f"✅ Sample quiz created with {len(sample_questions)} questions")
-
-# ─────────────────────────────────────────────────────────────
-# 9. LESSON NOTE — Sample AI-style lesson note (pre-written, not AI generated)
-# ─────────────────────────────────────────────────────────────
-lesson_note = LessonNote(
-    title="Mathematics — Linear Equations",
-    subject="Mathematics",
-    topic="Linear Equations",
-    class_level="JHS 3",
-    content=(
-        "LESSON NOTE\n"
-        "Subject: Mathematics | Topic: Linear Equations | Class: JHS 3\n\n"
-        "LEARNING OBJECTIVES\n"
-        "1. Define a linear equation\n"
-        "2. Solve simple linear equations in one variable\n"
-        "3. Apply linear equations to real-life word problems\n\n"
-        "INTRODUCTION\nAsk students how they would split a bill evenly...\n\n"
-        "MAIN CONTENT\nA linear equation is an equation in which the "
-        "highest power of the variable is 1...\n\n"
-        "HOMEWORK\nSolve 5 linear equations from the textbook, page 47."
-    ),
-    teacher_id=teacher.id,
-    is_shared=True,
-    source_file=None
+q1 = QuizQuestion(
+    quiz_id=quiz.id,
+    question_text="Which organelle is known as the powerhouse of the cell?",
+    question_type="mcq",
+    option_a="Nucleus", option_b="Mitochondria", option_c="Ribosome", option_d="Golgi Apparatus",
+    correct_answer="B",
+    marks=1, order_num=1
 )
-db.add(lesson_note)
+q2 = QuizQuestion(
+    quiz_id=quiz.id,
+    question_text="True or False: Plant cells contain chloroplasts while animal cells do not.",
+    question_type="true_false",
+    option_a="True", option_b="False",
+    correct_answer="True",
+    marks=1, order_num=2
+)
+q3 = QuizQuestion(
+    quiz_id=quiz.id,
+    question_text="State the function of the cell membrane and describe semi-permeability.",
+    question_type="short_answer",
+    correct_answer="The cell membrane controls the movement of substances in and out of the cell. Semi-permeability allows certain molecules to pass while blocking others.",
+    marks=3, order_num=3
+)
+db.add_all([q1, q2, q3])
 db.commit()
-print("✅ Sample lesson note created and shared with students")
+print("[OK] Sample quiz with 3 questions created")
 
-# ─────────────────────────────────────────────────────────────
-# 10. ANNOUNCEMENT — Sample school-wide and class announcements
-# ─────────────────────────────────────────────────────────────
-schoolwide_announcement = Announcement(
-    title="Mid-Term Exams Schedule Released",
-    body="Mid-term examinations will run from March 24th to March 28th. Please check the notice board for your timetable.",
+# 10. LESSON NOTES
+n1 = LessonNote(
+    title="Introduction to Photosynthesis",
+    subject="Biology",
+    topic="Photosynthesis & Cellular Respiration",
+    class_level="SHS 2",
+    content="""LESSON NOTE
+Subject: Biology | Topic: Photosynthesis | Class: SHS 2
+Duration: 80 minutes
+
+LEARNING OBJECTIVES:
+1. Explain the word and chemical equations for photosynthesis.
+2. Differentiate between light-dependent and light-independent stages.
+3. Identify factors affecting the rate of photosynthesis.
+
+INTRODUCTION:
+Ask students why plants are green and how autotrophs produce energy from sunlight.
+
+MAIN CONTENT:
+Photosynthesis is the process by which green plants synthesize carbohydrates from carbon dioxide and water using light energy absorbed by chlorophyll.
+
+Equation: 6CO2 + 6H2O + light --> C6H12O6 + 6O2
+
+WORKED EXAMPLES:
+Calculate the mass of glucose produced from 264g of CO2 assuming 100% reaction efficiency.
+
+HOMEWORK:
+Complete Questions 1 to 5 on page 84 of NaCCA Biology Textbook.""",
+    teacher_id=teacher.id,
+    is_shared=True
+)
+db.add(n1)
+db.commit()
+print("[OK] Shared lesson note created")
+
+# 11. STUDY CARDS
+sc = StudyCardSet(
+    title="Balancing Chemical Equations & Redox",
+    subject="Chemistry",
+    topic="Redox Reactions",
+    student_id=students[0].id,
+    cards=[
+        {"question": "What is Oxidation in terms of electrons?", "answer": "Oxidation is the loss of electrons (OIL RIG)."},
+        {"question": "What is Reduction in terms of oxidation state?", "answer": "Reduction is a decrease in oxidation state."},
+        {"question": "What is an Oxidizing Agent?", "answer": "A substance that gains electrons and is reduced itself."},
+        {"question": "What is the oxidation number of oxygen in H2O?", "answer": "-2"},
+        {"question": "Balance: Fe + O2 -> Fe2O3", "answer": "4Fe + 3O2 -> 2Fe2O3"},
+    ]
+)
+db.add(sc)
+db.commit()
+print("[OK] Study cards set created")
+
+# 12. RESOURCES
+r1 = Resource(
+    title="NaCCA Senior High School Biology Syllabus",
+    description="Official Ghana Education Service curriculum outline for Form 1 to Form 3 Biology.",
+    subject="Biology",
+    class_level="SHS 1-3",
+    file_url="https://edualert.gh/files/biology_syllable_nacca.pdf",
+    file_type="pdf",
+    ai_summary="Comprehensive 3-year SHS syllabus detailing learning indicators, core competencies, and assessment schemes for Ghanaian biology students.",
+    uploaded_by=teacher.id
+)
+db.add(r1)
+db.commit()
+print("[OK] Learning resource created")
+
+# 13. ANNOUNCEMENTS
+a1 = Announcement(
+    title="Mid-term Exams Begin Next Monday",
+    body="All Form 2 students should report to the exam hall by 7:45 AM. Ensure you bring your government-issued ID cards and student tablets.",
     author_id=headmaster.id,
     is_schoolwide=True
 )
-db.add(schoolwide_announcement)
-
-class_announcement = Announcement(
-    title="Bring Your Calculator on Friday",
-    body="All JHS 3B students should bring their calculators for Friday's Mathematics lesson on linear equations.",
+a2 = Announcement(
+    title="Biology Field Trip Permission Slips Due",
+    body="Please return signed permission slips to Mr. Mensah before Friday afternoon.",
     author_id=teacher.id,
-    class_id=class_3b.id,
+    class_id=class_2a.id,
     is_schoolwide=False
 )
-db.add(class_announcement)
+db.add_all([a1, a2])
 db.commit()
-print("✅ 2 announcements created (1 school-wide, 1 class-specific)")
+print("[OK] Announcements created")
 
-# ─────────────────────────────────────────────────────────────
+# 14. REPORT CARD
+rc = ReportCard(
+    student_id=students[0].id, # Kwame Mensah
+    term="Term 2",
+    year=2025,
+    overall_average=82.4,
+    attendance_rate=96.0,
+    ai_comment="Kwame has demonstrated exceptional diligence in Biology and Mathematics this term. His active participation and lab work show great dedication. To reach peak performance, focus on reviewing advanced redox calculations in Chemistry.",
+    teacher_comment="Kwame has demonstrated exceptional diligence in Biology and Mathematics this term. His active participation and lab work show great dedication. To reach peak performance, focus on reviewing advanced redox calculations in Chemistry.",
+    approved="approved"
+)
+db.add(rc)
+db.commit()
+print("[OK] Report card created")
+
 db.close()
 
-print("\n" + "="*50)
-print("🎉 DATABASE SEEDING COMPLETE")
-print("="*50)
-print("\n📧 Test Accounts:")
-print("   Teacher    → teacher@edualert.gh  / password123")
-print("   Headmaster → admin@edualert.gh    / password123")
-print(f"\n📊 Data Summary:")
-print(f"   • 1 class (JHS 3B)")
-print(f"   • {len(students)} students enrolled")
-print(f"   • {len(students) * len(subjects) * 2} score records")
-print(f"   • 1 assignment with 1 submission")
-print(f"   • 1 quiz with {len(sample_questions)} questions")
-print(f"   • 1 shared lesson note")
-print(f"   • 2 announcements")
-print("\n👉 Run 'uvicorn main:app --reload' and visit /docs to explore!")
+print("\n==================================================")
+print("DATABASE SEEDING COMPLETE SUCCESSFULLY!")
+print("==================================================")
+print("\nTest Login Credentials:")
+print("  Student   -> student@edualert.gh / password123")
+print("  Teacher   -> teacher@edualert.gh / password123")
+print("  Headmaster-> admin@edualert.gh   / password123")
+print("==================================================")
