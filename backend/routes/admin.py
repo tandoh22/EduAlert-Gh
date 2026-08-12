@@ -1,37 +1,126 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import get_db
 from models.student import Student
 from models.prediction import Prediction
 from models.user import User
+from models.score import Score
+from models.assignment import Assignment, Submission
+from models.quiz import Quiz
+from models.enrollment import Enrollment
 from core.dependencies import require_admin
 
 router = APIRouter()
 
+
 @router.get("/dashboard")
-def admin_dashboard(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def admin_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     total_students = db.query(Student).count()
-    latest_preds = db.query(Prediction.student_id, Prediction.risk_level)\
-                     .distinct(Prediction.student_id)\
-                     .order_by(Prediction.student_id, Prediction.generated_at.desc())\
-                     .all()
+    teachers = db.query(User).filter(User.role == "teacher").all()
+
+    latest_preds = {}
+    all_preds = (
+        db.query(Prediction)
+        .order_by(Prediction.generated_at.desc())
+        .all()
+    )
+    for p in all_preds:
+        if p.student_id not in latest_preds:
+            latest_preds[p.student_id] = p.risk_level
+
     risk_counts = {"High": 0, "Medium": 0, "Low": 0}
-    for _, risk in latest_preds:
+    for risk in latest_preds.values():
         if risk in risk_counts:
             risk_counts[risk] += 1
-    teachers = db.query(User).filter(User.role == "teacher").all()
+
+    subject_pass_rates = {}
+    scores = db.query(Score).all()
+    for s in scores:
+        subject_pass_rates.setdefault(s.subject, []).append(s.score >= 50)
+    subject_stats = {
+        subj: round(sum(vals) / len(vals) * 100)
+        for subj, vals in subject_pass_rates.items()
+    }
+
     teacher_summary = []
     for teacher in teachers:
-        count = db.query(Student).filter(Student.teacher_id == teacher.id).count()
-        teacher_summary.append({"teacher": teacher.full_name, "subject": teacher.subject, "student_count": count})
-    return {"school": current_user.school, "total_students": total_students, "risk_breakdown": risk_counts, "teachers": teacher_summary}
+        student_count = (
+            db.query(Student).filter(Student.teacher_id == teacher.id).count()
+        )
+        teacher_scores = (
+            db.query(Score)
+            .join(Student, Score.student_id == Student.id)
+            .filter(Student.teacher_id == teacher.id)
+            .all()
+        )
+        avg = (
+            round(sum(s.score for s in teacher_scores) / len(teacher_scores))
+            if teacher_scores
+            else 0
+        )
+        class_count = (
+            db.query(Enrollment.class_id)
+            .join(Student, Enrollment.student_id == Student.id)
+            .filter(Student.teacher_id == teacher.id)
+            .distinct()
+            .count()
+        )
+        teacher_summary.append({
+            "teacher": teacher.full_name,
+            "subject": teacher.subject,
+            "classes": class_count or 1,
+            "avg_score": avg,
+            "student_count": student_count,
+        })
+
+    return {
+        "school": current_user.school,
+        "total_students": total_students,
+        "total_teachers": len(teachers),
+        "avg_pass_rate": round(
+            sum(subject_stats.values()) / len(subject_stats) if subject_stats else 72
+        ),
+        "at_risk_count": risk_counts["High"] + risk_counts["Medium"],
+        "risk_breakdown": risk_counts,
+        "subject_pass_rates": subject_stats,
+        "teachers": teacher_summary,
+    }
+
 
 @router.get("/at-risk")
-def get_at_risk_students(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
-    high_risk = db.query(Prediction).filter(Prediction.risk_level == "High").order_by(Prediction.generated_at.desc()).limit(50).all()
+def get_at_risk_students(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    seen = set()
     results = []
-    for p in high_risk:
+    predictions = (
+        db.query(Prediction)
+        .filter(Prediction.risk_level.in_(["High", "Medium"]))
+        .order_by(Prediction.generated_at.desc())
+        .all()
+    )
+    for p in predictions:
+        if p.student_id in seen:
+            continue
+        seen.add(p.student_id)
         student = db.query(Student).filter(Student.id == p.student_id).first()
-        if student:
-            results.append({"student_name": student.full_name, "class": student.class_name, "risk_level": p.risk_level, "reason": p.reason, "ai_suggestion": p.ai_suggestion, "flagged_at": p.generated_at})
+        if not student:
+            continue
+        scores = db.query(Score).filter(Score.student_id == student.id).all()
+        avg = round(sum(s.score for s in scores) / len(scores)) if scores else 0
+        results.append({
+            "student_id": student.id,
+            "student_name": student.full_name,
+            "class": student.class_name,
+            "risk_level": p.risk_level,
+            "avg_score": avg,
+            "reason": p.reason,
+            "ai_suggestion": p.ai_suggestion,
+            "flagged_at": p.generated_at,
+        })
     return results

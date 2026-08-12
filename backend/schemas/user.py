@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class UserCreate(BaseModel):
@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     role: str = "teacher"
     subject: Optional[str] = None
     school: Optional[str] = None
+    admitted_course: Optional[str] = None  # required for students only, validated in the endpoint
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -19,8 +20,13 @@ class UserResponse(BaseModel):
     full_name: str
     email: str
     role: str
-    subject: Optional[str]
-    school: Optional[str]
+    status: str
+    subject: Optional[str] = None
+    school: Optional[str] = None
+    student_id: Optional[int] = None
+    class_id: Optional[int] = None
+    class_name: Optional[str] = None
+    admitted_course: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -29,3 +35,10 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+class ClassSubjectPick(BaseModel):
+    class_id: int
+    subject: Optional[str] = None  # required for teachers, ignored for students
+
+class ApproveUserRequest(BaseModel):
+    assignments: List[ClassSubjectPick] = []

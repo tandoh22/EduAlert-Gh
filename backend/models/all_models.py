@@ -15,3 +15,4 @@ from models.resource import Resource
 from models.announcement import Announcement
 from models.report_card import ReportCard
 from models.lab_session import LabSession
+from models.teacher_assignment import TeacherAssignment
