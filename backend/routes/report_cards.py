@@ -149,7 +149,6 @@ def get_all_report_cards(
         ReportCard.year == year
     ).all()
 
-
 @router.get("/{report_id}/pdf")
 def download_report_card_pdf(
     report_id: int,
@@ -274,4 +273,3 @@ def delete_report_card(
     db.delete(report)
     db.commit()
     return {"message": "Report card deleted successfully"}
-

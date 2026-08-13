@@ -152,7 +152,6 @@ print(f"[OK] Students enrolled in {len(subjects)} subjects")
 
 # 5. SCORES (including at-risk students like Akosua & Kojo)
 for i, student in enumerate(students):
-    # Akosua (index 1) & Kojo (index 4) are at-risk with low scores
     if i in [1, 4]:
         base = 42
     elif i in [2]:
@@ -174,7 +173,7 @@ for i, student in enumerate(students):
 db.commit()
 print("[OK] Historical scores added")
 
-# 6. ATTENDANCE (60 days)
+# 6. ATTENDANCE (40 school days)
 start_date = date(2025, 1, 6)
 for i, student in enumerate(students):
     presence_prob = 0.62 if i in [1, 4] else 0.94

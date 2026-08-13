@@ -59,7 +59,6 @@ def list_students(
         query = query.filter(Student.full_name.ilike(f"%{search}%"))
     return query.order_by(Student.full_name).all()
 
-
 @router.post("/", response_model=StudentResponse, status_code=201)
 def create_student(
     data: StudentCreate,
@@ -183,83 +182,3 @@ def update_student(
     db.commit()
     db.refresh(student)
     return student
-
-
-@router.delete("/{student_id}", status_code=204)
-def delete_student(
-    student_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_teacher),
-):
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id,
-    ).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-    db.delete(student)
-    db.commit()
-
-
-@router.get("/{student_id}/performance")
-def get_student_performance(
-    student_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Aggregated performance data for a student."""
-    student = db.query(Student).filter(Student.id == student_id).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    if current_user.role == "teacher" and student.teacher_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    if current_user.role == "student":
-        linked = db.query(Student).filter(Student.user_id == current_user.id).first()
-        if not linked or linked.id != student_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-
-    scores = db.query(Score).filter(Score.student_id == student_id).all()
-    attendances = db.query(Attendance).filter(Attendance.student_id == student_id).all()
-    prediction = (
-        db.query(Prediction)
-        .filter(Prediction.student_id == student_id)
-        .order_by(Prediction.generated_at.desc())
-        .first()
-    )
-
-    subject_scores: dict = {}
-    for s in scores:
-        subject_scores.setdefault(s.subject, []).append(s.score)
-    subject_avgs = {
-        subj: round(sum(vals) / len(vals), 1) for subj, vals in subject_scores.items()
-    }
-
-    total_days = len(attendances)
-    present = sum(1 for a in attendances if a.status == "present")
-    attendance_rate = round(present / total_days * 100, 1) if total_days else 0
-    overall_avg = round(sum(s.score for s in scores) / len(scores), 1) if scores else 0
-
-    sorted_scores = sorted(scores, key=lambda x: (x.year, x.term))
-    mid = len(sorted_scores) // 2
-    first_half = sorted_scores[:mid] if mid else sorted_scores
-    second_half = sorted_scores[mid:] if mid else sorted_scores
-    first_avg = sum(s.score for s in first_half) / len(first_half) if first_half else 0
-    second_avg = sum(s.score for s in second_half) / len(second_half) if second_half else 0
-    score_trend = round(second_avg - first_avg, 1)
-
-    return {
-        "student": StudentResponse.model_validate(student),
-        "overall_average": overall_avg,
-        "attendance_rate": attendance_rate,
-        "subject_averages": subject_avgs,
-        "score_trend": score_trend,
-        "scores": [{"subject": s.subject, "score": s.score, "term": s.term, "year": s.year} for s in scores],
-        "attendance_summary": {"present": present, "total": total_days},
-        "latest_prediction": {
-            "risk_level": prediction.risk_level,
-            "confidence_score": prediction.confidence_score,
-            "reason": prediction.reason,
-            "ai_suggestion": prediction.ai_suggestion,
-        } if prediction else None,
-    }

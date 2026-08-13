@@ -74,6 +74,7 @@ export default function Dashboard() {
   if (profileLoading || loading) return <LoadingState />;
   if (profileError) return <ErrorState message={profileError} />;
   if (error) return <ErrorState message={error} />;
+
   if (!classId) {
     return (
       <div>

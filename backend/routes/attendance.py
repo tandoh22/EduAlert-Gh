@@ -29,6 +29,13 @@ def record_attendance(data: AttendanceCreate, db: Session = Depends(get_db), cur
     db.refresh(record)
     return record
 
+@router.get("/me", response_model=List[AttendanceResponse])
+def get_my_attendance(
+    db: Session = Depends(get_db),
+    student: Student = Depends(get_current_student),
+):
+    return db.query(Attendance).filter(Attendance.student_id == student.id).all()
+
 @router.get("/student/{student_id}", response_model=List[AttendanceResponse])
 def get_student_attendance(student_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):
     student = db.query(Student).filter(Student.id == student_id, Student.teacher_id == current_user.id).first()

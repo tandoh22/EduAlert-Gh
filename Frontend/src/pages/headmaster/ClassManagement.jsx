@@ -93,7 +93,6 @@ export default function ClassManagement() {
     setFormError('');
     try {
       if (modalMode === 'edit') {
-        // name/level/course can be changed; year/school cannot
         await updateClass(editingClass.id, { name: form.name.trim(), level: form.level, course: form.course });
       } else {
         await createClass({

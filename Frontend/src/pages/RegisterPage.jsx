@@ -16,9 +16,6 @@ const ADMITTED_COURSES = [
   "Home Economics",
 ];
 
-// FastAPI sends `detail` as a plain string for HTTPException, but as an
-// array of validation-error objects for 422s — rendering that array
-// directly as a React child crashes the whole page, so normalize it here.
 function getErrorMessage(err) {
   const detail = err.response?.data?.detail;
   if (!detail) return "Registration failed. Please try again.";

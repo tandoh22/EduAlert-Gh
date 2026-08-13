@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import httpx
+import os
 from database import get_db
 from models.assignment import Assignment, Submission
 from models.student import Student
@@ -14,6 +15,10 @@ from core.config import settings
 from models.user import User
 
 router = APIRouter()
+
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = "uploads/assignments"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/", response_model=AssignmentResponse, status_code=201)
 def create_assignment(
@@ -36,6 +41,34 @@ def get_assignments(
         Assignment.teacher_id == current_user.id
     ).all()
 
+@router.delete("/{assignment_id}")
+def delete_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Teacher deletes an assignment."""
+    assignment = db.query(Assignment).filter(
+        Assignment.id == assignment_id,
+        Assignment.teacher_id == current_user.id
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    db.delete(assignment)
+    db.commit()
+    return {"message": "Assignment deleted successfully"}
+
+@router.get("/my-submissions", response_model=List[SubmissionResponse])
+def get_my_submissions(
+    db: Session = Depends(get_db),
+    student: Student = Depends(get_current_student),
+):
+    """Student views their own assignment submissions."""
+    return db.query(Submission).filter(
+        Submission.student_id == student.id
+    ).order_by(Submission.submitted_at.desc()).all()
+
 @router.get("/class/{class_id}", response_model=List[AssignmentResponse])
 def get_class_assignments(
     class_id: int,
@@ -45,14 +78,6 @@ def get_class_assignments(
     return db.query(Assignment).filter(
         Assignment.class_id == class_id
     ).all()
-
-@router.get("/my-submissions", response_model=List[SubmissionResponse])
-def get_my_submissions(
-    db: Session = Depends(get_db),
-    student: Student = Depends(get_current_student),
-):
-    """Return the logged-in student's own assignment submissions."""
-    return db.query(Submission).filter(Submission.student_id == student.id).all()
 
 @router.get("/{assignment_id}", response_model=AssignmentResponse)
 def get_assignment(
@@ -67,50 +92,54 @@ def get_assignment(
         raise HTTPException(status_code=404, detail="Assignment not found")
     return assignment
 
-@router.delete("/{assignment_id}", status_code=204)
-def delete_assignment(
-    assignment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_teacher)
-):
-    assignment = db.query(Assignment).filter(
-        Assignment.id == assignment_id,
-        Assignment.teacher_id == current_user.id
-    ).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
-    db.delete(assignment)
-    db.commit()
-
 @router.post("/submit", response_model=SubmissionResponse, status_code=201)
 def submit_assignment(
-    data: SubmissionCreate,
+    assignment_id: int = Form(...),
+    answer_text: str = Form(""),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     student: Student = Depends(get_current_student),
 ):
+    """
+    Student submits an assignment with optional file upload.
+    Claude AI automatically reads the submission and generates
+    feedback and a suggested score.
+    """
     assignment = db.query(Assignment).filter(
-        Assignment.id == data.assignment_id
+        Assignment.id == assignment_id
     ).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
     existing = db.query(Submission).filter(
-        Submission.assignment_id == data.assignment_id,
+        Submission.assignment_id == assignment_id,
         Submission.student_id == student.id
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Already submitted")
 
+    # Handle file upload
+    file_url = None
+    if file:
+        unique_filename = f"{student.id}_{assignment_id}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        with open(file_path, "wb") as buffer:
+            content = file.file.read()
+            buffer.write(content)
+        
+        file_url = f"/uploads/assignments/{unique_filename}"
+
     ai_feedback = None
     ai_score = None
 
-    if data.answer_text and settings.ANTHROPIC_API_KEY:
+    if answer_text and settings.ANTHROPIC_API_KEY:
         try:
             prompt = f"""
 Evaluate Ghanaian SHS assignment.
 Assignment: {assignment.title}
 Subject: {assignment.subject}
-Answer: {data.answer_text}
+Answer: {answer_text}
 
 Respond format:
 SCORE: [number out of 100]
@@ -146,7 +175,7 @@ FEEDBACK: [3-4 sentences]
             pass
 
     if ai_score is None:
-        answer_length = len(data.answer_text or "")
+        answer_length = len(answer_text or "")
         if answer_length > 150:
             ai_score = 88
             ai_feedback = "Thorough submission with strong conceptual understanding! Your response covers key required steps. Be sure to review intermediate calculations to ensure complete accuracy."
@@ -158,10 +187,10 @@ FEEDBACK: [3-4 sentences]
             ai_feedback = "Submission received. Your answer is somewhat brief. Expand on your explanations and show all working steps to improve your final score."
 
     submission = Submission(
-        assignment_id=data.assignment_id,
+        assignment_id=assignment_id,
         student_id=student.id,
-        answer_text=data.answer_text,
-        file_url=data.file_url,
+        answer_text=answer_text,
+        file_url=file_url,
         ai_feedback=ai_feedback,
         ai_score=ai_score,
     )
