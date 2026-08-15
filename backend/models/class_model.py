@@ -7,8 +7,8 @@ from core.curriculum import COURSE_SUBJECTS
 class Class(Base):
     __tablename__ = "classes"
     id         = Column(Integer, primary_key=True, index=True)
-    name       = Column(String, nullable=False)        # e.g. "JHS 2B", "SHS 1A"
-    level      = Column(String, nullable=False)        # "JHS" or "SHS"
+    name       = Column(String, nullable=False)        # e.g. "SHS 1A", "Form 2 Science A"
+    level      = Column(String, nullable=False)        # always "SHS" — this app only covers Senior High Schools
     course     = Column(String, nullable=True)          # e.g. "SCIENCE 1" — drives the subject list
     year       = Column(Integer, nullable=False)
     school     = Column(String, nullable=True)

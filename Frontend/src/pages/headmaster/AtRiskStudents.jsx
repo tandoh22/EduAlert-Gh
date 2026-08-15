@@ -1,34 +1,55 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
-import { Search, Filter, AlertTriangle, TrendingDown, Mail, Phone, MoreVertical, Download, Loader2 } from 'lucide-react';
-import EmptyState from '../../components/LoadingState';
+import { Search, AlertTriangle, Mail, RefreshCw } from 'lucide-react';
+import LoadingState, { EmptyState } from '../../components/LoadingState';
+import { fetchAtRiskStudents, runSchoolWidePredictions } from '../../services/headmasterService';
 
 export default function AtRiskStudents() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRiskLevel, setSelectedRiskLevel] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [atRiskStudents, setAtRiskStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    fetchAtRiskStudents()
+      .then((res) => setAtRiskStudents(res.data))
+      .catch((err) => setError(err.response?.data?.detail || 'Failed to load at-risk students.'))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    // In production, fetch real at-risk students from API
-    setLoading(false);
+    load();
   }, []);
+
+  const handleRunAssessment = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      await runSchoolWidePredictions();
+      load();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not run risk assessment.');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const classes = [...new Set(atRiskStudents.map((s) => s.class_name))];
 
   const filteredStudents = atRiskStudents.filter(
     (student) =>
       student.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (selectedRiskLevel === '' || student.riskLevel === selectedRiskLevel) &&
-      (selectedClass === '' || student.class === selectedClass)
+      (selectedRiskLevel === '' || student.risk_level === selectedRiskLevel) &&
+      (selectedClass === '' || student.class_name === selectedClass)
   );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <LoadingState />;
 
   const getRiskBadge = (level) => {
     switch (level) {
@@ -37,16 +58,16 @@ export default function AtRiskStudents() {
       case 'medium':
         return 'bg-yellow-100 text-yellow-700';
       case 'low':
-        return 'bg-orange-100 text-orange-700';
+        return 'bg-green-100 text-green-700';
       default:
         return 'bg-slate-100 text-slate-700';
     }
   };
 
   const getAttendanceColor = (attendance) => {
-    const value = parseInt(attendance);
-    if (value < 60) return 'text-red-600';
-    if (value < 75) return 'text-yellow-600';
+    if (attendance == null) return 'text-slate-400';
+    if (attendance < 60) return 'text-red-600';
+    if (attendance < 75) return 'text-yellow-600';
     return 'text-emerald-600';
   };
 
@@ -54,14 +75,20 @@ export default function AtRiskStudents() {
     <div>
       <PageHeader title="At-Risk Students" subtitle="Monitor and support students who need intervention" />
 
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="edu-card p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-slate-500">Total At-Risk</span>
             <AlertTriangle className="w-5 h-5 text-red-500" />
           </div>
-          <div className="text-3xl font-bold text-slate-900">{atRiskStudents.length || 0}</div>
+          <div className="text-3xl font-bold text-slate-900">{atRiskStudents.length}</div>
         </div>
 
         <div className="edu-card p-5">
@@ -70,7 +97,7 @@ export default function AtRiskStudents() {
             <AlertTriangle className="w-5 h-5 text-red-500" />
           </div>
           <div className="text-3xl font-bold text-slate-900">
-            {atRiskStudents.filter(s => s.riskLevel === 'high').length || 0}
+            {atRiskStudents.filter((s) => s.risk_level === 'high').length}
           </div>
         </div>
 
@@ -80,17 +107,7 @@ export default function AtRiskStudents() {
             <AlertTriangle className="w-5 h-5 text-yellow-500" />
           </div>
           <div className="text-3xl font-bold text-slate-900">
-            {atRiskStudents.filter(s => s.riskLevel === 'medium').length || 0}
-          </div>
-        </div>
-
-        <div className="edu-card p-5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-500">Low Risk</span>
-            <AlertTriangle className="w-5 h-5 text-orange-500" />
-          </div>
-          <div className="text-3xl font-bold text-slate-900">
-            {atRiskStudents.filter(s => s.riskLevel === 'low').length || 0}
+            {atRiskStudents.filter((s) => s.risk_level === 'medium').length}
           </div>
         </div>
       </div>
@@ -118,7 +135,6 @@ export default function AtRiskStudents() {
               <option value="">All Risk Levels</option>
               <option value="high">High Risk</option>
               <option value="medium">Medium Risk</option>
-              <option value="low">Low Risk</option>
             </select>
 
             <select
@@ -127,17 +143,19 @@ export default function AtRiskStudents() {
               className="px-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
               <option value="">All Classes</option>
+              {classes.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
-
-            <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-              <Filter className="w-4 h-4" />
-              More Filters
-            </button>
           </div>
 
-          <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0A192F] hover:bg-slate-100 rounded-lg transition-colors">
-            <Download className="w-4 h-4" />
-            Export Report
+          <button
+            onClick={handleRunAssessment}
+            disabled={running}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${running ? 'animate-spin' : ''}`} />
+            {running ? 'Running...' : 'Run risk assessment'}
           </button>
         </div>
       </div>
@@ -145,7 +163,7 @@ export default function AtRiskStudents() {
       {/* Students Table */}
       <div className="edu-card overflow-hidden">
         {filteredStudents.length === 0 ? (
-          <EmptyState message="No at-risk students found. Data will appear once students are enrolled and performance is tracked." />
+          <EmptyState message="No at-risk students found yet. Click 'Run risk assessment' to evaluate enrolled students." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -158,45 +176,47 @@ export default function AtRiskStudents() {
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Average Score</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Risk Factors</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredStudents.map((student) => (
-                  <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                  <tr
+                    key={student.id}
+                    onClick={() => navigate(`/headmaster/students/${student.id}/performance`)}
+                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-[#0A192F] text-white flex items-center justify-center text-xs font-semibold">
-                          {student.name.split(' ').map(n => n[0]).join('')}
+                          {student.name.split(' ').map((n) => n[0]).join('')}
                         </div>
                         <div>
                           <div className="font-medium text-slate-900">{student.name}</div>
-                          <div className="text-xs text-slate-500">{student.studentId}</div>
+                          <div className="text-xs text-slate-500">{student.student_id}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-slate-600">{student.class}</span>
+                      <span className="text-sm text-slate-600">{student.class_name}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${getRiskBadge(student.riskLevel)}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${getRiskBadge(student.risk_level)}`}>
                         <AlertTriangle className="w-3 h-3" />
-                        {student.riskLevel}
+                        {student.risk_level}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-semibold ${getAttendanceColor(student.attendance)}`}>
-                          {student.attendance}
-                        </span>
-                        <TrendingDown className="w-4 h-4 text-red-500" />
-                      </div>
+                      <span className={`text-sm font-semibold ${getAttendanceColor(student.attendance)}`}>
+                        {student.attendance != null ? `${student.attendance}%` : '—'}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm font-semibold text-slate-900">{student.averageScore}%</span>
+                      <span className="text-sm font-semibold text-slate-900">
+                        {student.average_score != null ? `${student.average_score}%` : '—'}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
                         {student.factors.map((factor, index) => (
                           <span key={index} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">
                             {factor}
@@ -205,21 +225,14 @@ export default function AtRiskStudents() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
+                      {student.email ? (
                         <div className="flex items-center gap-1 text-xs text-slate-600">
                           <Mail className="w-3 h-3" />
                           {student.email}
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-slate-600">
-                          <Phone className="w-3 h-3" />
-                          {student.phone}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <button className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
-                        <MoreVertical className="w-4 h-4 text-slate-400" />
-                      </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

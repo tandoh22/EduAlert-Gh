@@ -147,7 +147,7 @@ def approve_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     # These are placeholders until the app has a real "current term" setting.
-    TERM, YEAR = "Term 2", 2025
+    TERM, YEAR = "Semester 2", 2025
 
     if user.role == "teacher":
         if not data.assignments:

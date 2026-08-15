@@ -5,8 +5,6 @@ import { Search, Filter, Users, GraduationCap, Plus, Edit, Trash2, X } from 'luc
 import { fetchClasses, createClass, updateClass, deleteClass } from '../../services/headmasterService';
 import { getStoredUser } from '../../services/authService';
 
-const LEVELS = ['JHS', 'SHS'];
-
 const COURSES = [
   'Science 1', 'Science 2', 'Science 3',
   'Arts 1', 'Arts 2', 'Arts 3',
@@ -25,7 +23,6 @@ const emptyForm = (school) => ({
 
 export default function ClassManagement() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedLevel, setSelectedLevel] = useState('');
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -51,10 +48,8 @@ export default function ClassManagement() {
     load();
   }, []);
 
-  const filteredClasses = classes.filter(
-    (classItem) =>
-      classItem.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (selectedLevel === '' || classItem.level === selectedLevel)
+  const filteredClasses = classes.filter((classItem) =>
+    classItem.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const openAddModal = () => {
@@ -93,6 +88,7 @@ export default function ClassManagement() {
     setFormError('');
     try {
       if (modalMode === 'edit') {
+        // name/level/course can be changed; year/school cannot
         await updateClass(editingClass.id, { name: form.name.trim(), level: form.level, course: form.course });
       } else {
         await createClass({
@@ -128,11 +124,9 @@ export default function ClassManagement() {
 
   if (loading) return <LoadingState />;
 
-  const levelsPresent = [...new Set(classes.map((c) => c.level))];
-
   return (
     <div>
-      <PageHeader title="Class Management" subtitle="Manage classes, teachers, and student assignments" />
+      <PageHeader title="Class Management" subtitle="Manage classes, teachers, and student assignments (Senior High School)" />
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -140,8 +134,8 @@ export default function ClassManagement() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      {/* Stats Card */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div className="edu-card p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
@@ -150,16 +144,6 @@ export default function ClassManagement() {
             <span className="text-sm text-slate-500">Total Classes</span>
           </div>
           <div className="text-2xl font-bold text-slate-900">{classes.length}</div>
-        </div>
-
-        <div className="edu-card p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-sm text-slate-500">Levels in use</span>
-          </div>
-          <div className="text-2xl font-bold text-slate-900">{levelsPresent.length}</div>
         </div>
       </div>
 
@@ -177,17 +161,6 @@ export default function ClassManagement() {
                 className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </div>
-
-            <select
-              value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
-              className="px-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            >
-              <option value="">All Levels</option>
-              {LEVELS.map((lvl) => (
-                <option key={lvl} value={lvl}>{lvl}</option>
-              ))}
-            </select>
 
             <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
               <Filter className="w-4 h-4" />
@@ -289,19 +262,6 @@ export default function ClassManagement() {
                   required
                   className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Level</label>
-                <select
-                  value={form.level}
-                  onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}
-                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                >
-                  {LEVELS.map((lvl) => (
-                    <option key={lvl} value={lvl}>{lvl}</option>
-                  ))}
-                </select>
               </div>
 
               <div>

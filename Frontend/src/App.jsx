@@ -32,6 +32,7 @@ import Submissions from './pages/teacher/Submissions';
 import HeadmasterDashboard from './pages/headmaster/HeadmasterDashboard';
 import PendingAccounts from './pages/headmaster/PendingAccounts';
 import AtRiskStudents from './pages/headmaster/AtRiskStudents';
+import StudentPerformance from './pages/headmaster/StudentPerformance';
 import BulkReportCards from './pages/headmaster/BulkReportCards';
 import ClassManagement from './pages/headmaster/ClassManagement';
 import HeadmasterAnnouncements from './pages/headmaster/HeadmasterAnnouncements';
@@ -304,6 +305,16 @@ export default function App() {
             <ProtectedRoute>
               <HeadmasterLayout>
                 <AtRiskStudents />
+              </HeadmasterLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/headmaster/students/:studentId/performance"
+          element={
+            <ProtectedRoute>
+              <HeadmasterLayout>
+                <StudentPerformance />
               </HeadmasterLayout>
             </ProtectedRoute>
           }

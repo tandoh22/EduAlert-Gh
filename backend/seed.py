@@ -12,6 +12,7 @@ from models.all_models import (
     LessonNote, StudyCardSet, Resource, Announcement, ReportCard
 )
 from core.security import hash_password
+from ml.predictor import predict_student_risk
 
 Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
@@ -96,7 +97,7 @@ db.add(TeacherAssignment(
     teacher_id=teacher.id,
     class_id=class_2a.id,
     subject=teacher.subject,
-    term="Term 2",
+    term="Semester 2",
     year=2025
 ))
 db.commit()
@@ -144,7 +145,7 @@ for student in students:
             student_id=student.id,
             class_id=class_2a.id,
             subject=subject,
-            term="Term 2",
+            term="Semester 2",
             year=2025
         ))
 db.commit()
@@ -152,6 +153,7 @@ print(f"[OK] Students enrolled in {len(subjects)} subjects")
 
 # 5. SCORES (including at-risk students like Akosua & Kojo)
 for i, student in enumerate(students):
+    # Akosua (index 1) & Kojo (index 4) are at-risk with low scores
     if i in [1, 4]:
         base = 42
     elif i in [2]:
@@ -160,7 +162,7 @@ for i, student in enumerate(students):
         base = 80
 
     for subject in subjects:
-        for term in ["Term 1", "Term 2"]:
+        for term in ["Semester 1", "Semester 2"]:
             score_val = max(15, min(100, base + random.randint(-12, 12)))
             db.add(Score(
                 student_id=student.id,
@@ -168,12 +170,12 @@ for i, student in enumerate(students):
                 score=score_val,
                 term=term,
                 year=2025,
-                exam_type="Mid Term" if term == "Term 1" else "End of Term"
+                exam_type="Mid Semester" if term == "Semester 1" else "End of Semester"
             ))
 db.commit()
 print("[OK] Historical scores added")
 
-# 6. ATTENDANCE (40 school days)
+# 6. ATTENDANCE (60 days)
 start_date = date(2025, 1, 6)
 for i, student in enumerate(students):
     presence_prob = 0.62 if i in [1, 4] else 0.94
@@ -186,7 +188,7 @@ for i, student in enumerate(students):
             student_id=student.id,
             date=school_day,
             status=status,
-            term="Term 2",
+            term="Semester 2",
             year=2025,
         ))
 db.commit()
@@ -199,7 +201,7 @@ p1 = Prediction(
     confidence_score=0.91,
     reason="Low attendance (74%), declining Chemistry & Physics scores (<50%)",
     ai_suggestion="Akosua Frimpong is missing core science lessons. Recommend scheduling a 20-min catch-up session on redox reactions and contacting parent/guardian.",
-    term="Term 2",
+    term="Semester 2",
     year=2025
 )
 p2 = Prediction(
@@ -208,7 +210,7 @@ p2 = Prediction(
     confidence_score=0.88,
     reason="Very low attendance (62%), failed 3 subjects",
     ai_suggestion="Kojo Antwi hasn't submitted the last 4 assignments. Recommend contacting guardian and arranging after-school remedial tutoring.",
-    term="Term 2",
+    term="Semester 2",
     year=2025
 )
 p3 = Prediction(
@@ -217,7 +219,7 @@ p3 = Prediction(
     confidence_score=0.68,
     reason="Slight downward score trend in Mathematics",
     ai_suggestion="Yaw Darko is experiencing a slight score drop in Core Maths. Monitor closely in class and provide extra practice problems.",
-    term="Term 2",
+    term="Semester 2",
     year=2025
 )
 p4 = Prediction(
@@ -226,12 +228,34 @@ p4 = Prediction(
     confidence_score=0.95,
     reason="High attendance (96%), excellent average score (82%)",
     ai_suggestion="Kwame Mensah is performing strongly. Encourage him to assist peers as a study mentor.",
-    term="Term 2",
+    term="Semester 2",
     year=2025
 )
 db.add_all([p1, p2, p3, p4])
 db.commit()
-print("[OK] AI Risk predictions seeded")
+print("[OK] AI Risk predictions seeded (4 hand-authored)")
+
+# The 4 above (indices 0, 1, 2, 4) already have hand-written predictions.
+# Run the real predictor for everyone else so all 10 students are actually
+# tracked, using the same logic the live "Run risk assessment" button uses.
+already_predicted_indices = {0, 1, 2, 4}
+for i, student in enumerate(students):
+    if i in already_predicted_indices:
+        continue
+    student_scores = db.query(Score).filter(Score.student_id == student.id).all()
+    student_attendance = db.query(Attendance).filter(Attendance.student_id == student.id).all()
+    result = predict_student_risk(student, student_scores, student_attendance)
+    db.add(Prediction(
+        student_id=student.id,
+        risk_level=result["risk_level"],
+        confidence_score=result["confidence"],
+        reason=result["reason"],
+        ai_suggestion=f"{student.full_name.split()[0]} should be monitored based on current attendance and score trends this term.",
+        term="Semester 2",
+        year=2025,
+    ))
+db.commit()
+print("[OK] Risk predictions generated for the remaining students")
 
 # 8. ASSIGNMENT & SUBMISSION
 assignment = Assignment(
@@ -370,7 +394,7 @@ print("[OK] Learning resource created")
 
 # 13. ANNOUNCEMENTS
 a1 = Announcement(
-    title="Mid-term Exams Begin Next Monday",
+    title="Mid-Sem Exams Begin Next Monday",
     body="All Form 2 students should report to the exam hall by 7:45 AM. Ensure you bring your government-issued ID cards and student tablets.",
     author_id=headmaster.id,
     is_schoolwide=True
@@ -389,7 +413,7 @@ print("[OK] Announcements created")
 # 14. REPORT CARD
 rc = ReportCard(
     student_id=students[0].id, # Kwame Mensah
-    term="Term 2",
+    term="Semester 2",
     year=2025,
     overall_average=82.4,
     attendance_rate=96.0,
