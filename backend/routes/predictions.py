@@ -12,23 +12,11 @@ from schemas.prediction import PredictionResponse
 from core.dependencies import require_teacher, require_admin
 from models.user import User
 from ml.predictor import predict_student_risk
-from ml.ai_suggestion import generate_suggestion
+from ml.ai_suggestion import generate_suggestion, _fallback_suggestion
 
 router = APIRouter()
 
 SEMESTER, YEAR = "Semester 2", 2025  # placeholder until there's a real "current semester" setting
-
-
-def _safe_suggestion(student_name: str, result: dict) -> str:
-    """generate_suggestion() likely calls out to an AI API — don't let a
-    network hiccup, missing key, or rate limit kill a whole batch run."""
-    try:
-        return generate_suggestion(student_name, result)
-    except Exception:
-        return (
-            f"{student_name} was flagged {result['risk_level'].lower()} risk based on "
-            f"recent attendance and score data. Review their record for details."
-        )
 
 
 def _teacher_class_ids(db: Session, teacher_id: int) -> List[int]:
@@ -123,7 +111,7 @@ def run_predictions_school_wide(
         if not scores and not attendances:
             continue
         result = predict_student_risk(student, scores, attendances)
-        suggestion = _safe_suggestion(student.full_name, result)
+        suggestion = _fallback_suggestion(result)  # bulk run — skip live AI calls to avoid timing out
         prediction = Prediction(
             student_id=student.id, risk_level=result["risk_level"],
             confidence_score=result["confidence"], reason=result["reason"],
@@ -148,7 +136,7 @@ def run_prediction(student_id: int, db: Session = Depends(get_db), current_user:
     if not scores and not attendances:
         raise HTTPException(status_code=400, detail="Not enough data to predict. Add scores and attendance first.")
     result = predict_student_risk(student, scores, attendances)
-    suggestion = _safe_suggestion(student.full_name, result)
+    suggestion = generate_suggestion(student.full_name, result)  # single student — a live AI call is fine here
     prediction = Prediction(
         student_id=student_id, risk_level=result["risk_level"],
         confidence_score=result["confidence"], reason=result["reason"],
@@ -183,7 +171,7 @@ def run_predictions_for_all(db: Session = Depends(get_db), current_user: User = 
         if not scores and not attendances:
             continue
         result = predict_student_risk(student, scores, attendances)
-        suggestion = _safe_suggestion(student.full_name, result)
+        suggestion = _fallback_suggestion(result)  # bulk run — skip live AI calls to avoid timing out
         prediction = Prediction(
             student_id=student.id, risk_level=result["risk_level"],
             confidence_score=result["confidence"], reason=result["reason"],

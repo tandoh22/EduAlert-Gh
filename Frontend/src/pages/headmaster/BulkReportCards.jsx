@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
-import { Download, Calendar, FileText, GraduationCap, Loader2, CheckCircle } from 'lucide-react';
-import EmptyState from '../../components/LoadingState';
+import { Download, FileText, GraduationCap, Loader2, CheckCircle } from 'lucide-react';
+import LoadingState, { EmptyState } from '../../components/LoadingState';
+import { fetchClasses } from '../../services/headmasterService';
 
 export default function BulkReportCards() {
-  const [term, setTerm] = useState('');
+  const [semester, setSemester] = useState('');
   const [academicYear, setAcademicYear] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // In production, fetch real classes from API
-    setLoading(false);
+    fetchClasses()
+      .then((res) => setClasses(res.data))
+      .catch((err) => setError(err.response?.data?.detail || 'Failed to load classes.'))
+      .finally(() => setLoading(false));
   }, []);
 
   const [selectedClasses, setSelectedClasses] = useState([]);
@@ -34,13 +38,7 @@ export default function BulkReportCards() {
     setSelectedClasses([]);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <LoadingState />;
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -64,6 +62,12 @@ export default function BulkReportCards() {
   return (
     <div>
       <PageHeader title="Bulk Report Cards" subtitle="Generate report cards for multiple classes at once" />
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {!generated ? (
         <div className="max-w-4xl">
@@ -89,18 +93,17 @@ export default function BulkReportCards() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Term
+                    Semester
                   </label>
                   <select
-                    value={term}
-                    onChange={(e) => setTerm(e.target.value)}
+                    value={semester}
+                    onChange={(e) => setSemester(e.target.value)}
                     className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     required
                   >
-                    <option value="">Select term</option>
-                    <option value="1">Term 1</option>
-                    <option value="2">Term 2</option>
-                    <option value="3">Term 3</option>
+                    <option value="">Select semester</option>
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
                   </select>
                 </div>
               </div>
@@ -154,8 +157,8 @@ export default function BulkReportCards() {
                           </div>
                           <div className="flex-1">
                             <div className="font-medium text-slate-900">{classItem.name}</div>
-                            <div className="text-xs text-slate-500">{classItem.students} students</div>
-                            <div className="text-xs text-slate-400">{classItem.teacher}</div>
+                            <div className="text-xs text-slate-500">{classItem.course || 'No course set'}</div>
+                            <div className="text-xs text-slate-400">{classItem.subjects?.length || 0} subjects</div>
                           </div>
                         </div>
                       </label>
@@ -164,7 +167,7 @@ export default function BulkReportCards() {
                 )}
 
                 <p className="text-sm text-slate-500 mt-2">
-                  {selectedClasses.length} class(es) selected ({selectedClasses.reduce((acc, id) => acc + classes.find(c => c.id === id)?.students || 0, 0)} students total)
+                  {selectedClasses.length} class(es) selected
                 </p>
               </div>
 
@@ -203,7 +206,7 @@ export default function BulkReportCards() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Report Cards Generated</h3>
                   <p className="text-sm text-slate-500">
-                    Term {term} • {academicYear} • {selectedClasses.length} class(es)
+                    Semester {semester} • {academicYear} • {selectedClasses.length} class(es)
                   </p>
                 </div>
               </div>
@@ -216,16 +219,10 @@ export default function BulkReportCards() {
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 rounded-lg p-4 text-center">
                 <div className="text-2xl font-bold text-slate-900">{selectedClasses.length}</div>
                 <div className="text-sm text-slate-500">Classes</div>
-              </div>
-              <div className="bg-slate-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-slate-900">
-                  {selectedClasses.reduce((acc, id) => acc + classes.find(c => c.id === id)?.students || 0, 0)}
-                </div>
-                <div className="text-sm text-slate-500">Students</div>
               </div>
               <div className="bg-slate-50 rounded-lg p-4 text-center">
                 <div className="text-2xl font-bold text-emerald-600">Ready</div>
@@ -245,7 +242,7 @@ export default function BulkReportCards() {
                     </div>
                     <div>
                       <div className="font-medium text-slate-900">{classItem.name}</div>
-                      <div className="text-sm text-slate-500">{classItem.students} students • {classItem.teacher}</div>
+                      <div className="text-sm text-slate-500">{classItem.course || 'No course set'} • {classItem.subjects?.length || 0} subjects</div>
                     </div>
                   </div>
                   <button

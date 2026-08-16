@@ -205,16 +205,6 @@ export default function ClassManagement() {
                   <span className="text-sm text-slate-500">Subjects</span>
                   <span className="text-sm font-semibold text-slate-900">{classItem.subjects?.length || 0}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-500">Year</span>
-                  <span className="text-sm font-semibold text-slate-900">{classItem.year}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-500">School</span>
-                  <span className="text-sm font-semibold text-slate-900 truncate max-w-[160px]" title={classItem.school}>
-                    {classItem.school || '—'}
-                  </span>
-                </div>
               </div>
 
               <div className="flex gap-2 mt-6 pt-4 border-t border-slate-200">
@@ -276,33 +266,6 @@ export default function ClassManagement() {
                   ))}
                 </select>
                 <p className="text-xs text-slate-400 mt-1.5">Determines which subjects are available for this class.</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Year {modalMode === 'edit' && <span className="text-slate-400 font-normal">(can't be changed)</span>}
-                </label>
-                <input
-                  type="number"
-                  value={form.year}
-                  onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))}
-                  disabled={modalMode === 'edit'}
-                  required
-                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-slate-50 disabled:text-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  School {modalMode === 'edit' && <span className="text-slate-400 font-normal">(can't be changed)</span>}
-                </label>
-                <input
-                  value={form.school}
-                  onChange={(e) => setForm((f) => ({ ...f, school: e.target.value }))}
-                  placeholder="e.g. Achimota Senior High School"
-                  disabled={modalMode === 'edit'}
-                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-slate-50 disabled:text-slate-400"
-                />
               </div>
 
               {formError && (
