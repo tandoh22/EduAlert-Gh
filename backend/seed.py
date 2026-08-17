@@ -49,7 +49,7 @@ teacher = User(
     password_hash=hash_password("password123"),
     role="teacher",
     status="approved",
-    subject="Mathematics",
+    subject="Core Mathematics",
     school="Achimota Senior High School"
 )
 db.add(teacher)
@@ -82,7 +82,7 @@ print("[OK] Users created (teacher, headmaster, student)")
 
 # 2. CLASS
 class_2a = Class(
-    name="Form 2 Science A",
+    name="Form 2 Science 1",
     level="SHS",
     course="Science 1",
     year=2025,
@@ -101,7 +101,7 @@ db.add(TeacherAssignment(
     year=2025
 ))
 db.commit()
-print("[OK] Teacher assigned to Form 2 Science A")
+print("[OK] Teacher assigned to Form 2 Science 1")
 
 # 3. STUDENTS
 student_names = [
@@ -122,7 +122,7 @@ for i, (name, gender, u_id) in enumerate(student_names):
     s = Student(
         full_name=name,
         student_id=f"ACH2025{i+1:03d}",
-        class_name="Form 2 Science A",
+        class_name="Form 2 Science 1",
         gender=gender,
         teacher_id=teacher.id,
         user_id=u_id,
@@ -138,7 +138,7 @@ for s in students:
 print(f"[OK] {len(students)} students created (Kwame Mensah linked to student@edualert.gh)")
 
 # 4. ENROLLMENTS
-subjects = ["Biology", "Chemistry", "Physics", "Core Maths", "Elective Maths", "English", "History"]
+subjects = ["Biology", "Chemistry", "Physics", "Core Maths", "Elective Maths", "English", "Social Studies", "Integrated Science"]
 for student in students:
     for subject in subjects:
         db.add(Enrollment(

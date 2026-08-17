@@ -25,7 +25,7 @@ import LessonNoteGenerator from './pages/teacher/LessonNoteGenerator';
 import PostNotice from './pages/teacher/PostNotice';
 import QuizResults from './pages/teacher/QuizResults';
 import QuizGeneration from './pages/teacher/QuizGeneration';
-import ReportCardGenerator from './pages/teacher/ReportCardGenerator';
+import ResultsGenerator from './pages/teacher/ResultsGenerator';
 import ResourcesUpload from './pages/teacher/ResourcesUpload';
 import StudentLists from './pages/teacher/StudentLists';
 import Submissions from './pages/teacher/Submissions';
@@ -238,11 +238,21 @@ export default function App() {
           }
         />
         <Route
+          path="/teacher/results-generator"
+          element={
+            <ProtectedRoute>
+              <TeacherLayout>
+                <ResultsGenerator />
+              </TeacherLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/teacher/report-card-generator"
           element={
             <ProtectedRoute>
               <TeacherLayout>
-                <ReportCardGenerator />
+                <ResultsGenerator />
               </TeacherLayout>
             </ProtectedRoute>
           }

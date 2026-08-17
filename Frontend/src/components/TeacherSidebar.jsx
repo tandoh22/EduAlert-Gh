@@ -22,7 +22,7 @@ const teacherNavItems = [
   { name: 'Post Notice', path: '/teacher/post-notice', icon: Megaphone },
   { name: 'Quiz Generation', path: '/teacher/quiz-generation', icon: ClipboardCheck },
   { name: 'Quiz Results', path: '/teacher/quiz-results', icon: FileCheck },
-  { name: 'Report Card Generator', path: '/teacher/report-card-generator', icon: Sparkles },
+  { name: 'Results Generator', path: '/teacher/results-generator', icon: Sparkles },
   { name: 'Resources Upload', path: '/teacher/resources-upload', icon: Upload },
   { name: 'Student Lists', path: '/teacher/student-lists', icon: Users },
   { name: 'Submissions', path: '/teacher/submissions', icon: FileText },
