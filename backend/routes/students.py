@@ -62,21 +62,33 @@ def list_students(
     if current_user.role == "admin":
         query = db.query(Student)
     else:
-        class_ids = [
-            row.class_id for row in
-            db.query(TeacherAssignment.class_id)
+        assigned_classes = (
+            db.query(Class)
+            .join(TeacherAssignment, TeacherAssignment.class_id == Class.id)
             .filter(TeacherAssignment.teacher_id == current_user.id)
-            .distinct()
-        ]
-        if not class_ids:
-            return []
-        student_ids = [
-            row.student_id for row in
-            db.query(Enrollment.student_id)
-            .filter(Enrollment.class_id.in_(class_ids))
-            .distinct()
-        ]
-        query = db.query(Student).filter(Student.id.in_(student_ids))
+            .all()
+        )
+        class_ids = [c.id for c in assigned_classes]
+        class_names = [c.name for c in assigned_classes]
+
+        if not class_ids and not class_names:
+            query = db.query(Student).filter(Student.teacher_id == current_user.id)
+        else:
+            enrolled_student_ids = [
+                row.student_id for row in
+                db.query(Enrollment.student_id)
+                .filter(Enrollment.class_id.in_(class_ids))
+                .distinct()
+            ] if class_ids else []
+
+            from sqlalchemy import or_
+            filters = [Student.teacher_id == current_user.id]
+            if enrolled_student_ids:
+                filters.append(Student.id.in_(enrolled_student_ids))
+            if class_names:
+                filters.append(Student.class_name.in_(class_names))
+
+            query = db.query(Student).filter(or_(*filters)).distinct()
 
     if class_name:
         query = query.filter(Student.class_name == class_name)

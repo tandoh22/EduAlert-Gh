@@ -32,6 +32,53 @@ def get_all_classes(
     """Get all classes in the school."""
     return db.query(Class).all()
 
+@router.get("/my-classes")
+def get_my_classes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Get all classes and assigned subjects for the current teacher."""
+    from models.teacher_assignment import TeacherAssignment
+    
+    if current_user.role == "admin":
+        classes = db.query(Class).all()
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "level": c.level,
+                "course": c.course,
+                "year": c.year,
+                "school": c.school,
+                "subjects": c.subjects
+            }
+            for c in classes
+        ]
+        
+    assignments = (
+        db.query(TeacherAssignment, Class)
+        .join(Class, TeacherAssignment.class_id == Class.id)
+        .filter(TeacherAssignment.teacher_id == current_user.id)
+        .all()
+    )
+    
+    classes_map = {}
+    for ta, c in assignments:
+        if c.id not in classes_map:
+            classes_map[c.id] = {
+                "id": c.id,
+                "name": c.name,
+                "level": c.level,
+                "course": c.course,
+                "year": c.year,
+                "school": c.school,
+                "subjects": []
+            }
+        if ta.subject and ta.subject not in classes_map[c.id]["subjects"]:
+            classes_map[c.id]["subjects"].append(ta.subject)
+            
+    return list(classes_map.values())
+
 @router.get("/{class_id}", response_model=ClassResponse)
 def get_class(
     class_id: int,

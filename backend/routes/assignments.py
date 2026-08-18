@@ -26,6 +26,20 @@ def create_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher)
 ):
+    if current_user.role != "admin":
+        from models.teacher_assignment import TeacherAssignment
+        assignments = db.query(TeacherAssignment).filter(
+            TeacherAssignment.teacher_id == current_user.id,
+            TeacherAssignment.class_id == data.class_id,
+        ).all()
+        assigned_subjects = [a.subject.lower() for a in assignments if a.subject]
+        if current_user.subject:
+            assigned_subjects.append(current_user.subject.lower())
+        if not assignments and not (current_user.subject and data.subject and data.subject.lower() == current_user.subject.lower()):
+            raise HTTPException(status_code=400, detail="You are not assigned to teach this class.")
+        if data.subject and assigned_subjects and data.subject.lower() not in assigned_subjects:
+            raise HTTPException(status_code=400, detail=f"You are not assigned to teach '{data.subject}' in this class.")
+
     assignment = Assignment(**data.dict(), teacher_id=current_user.id)
     db.add(assignment)
     db.commit()

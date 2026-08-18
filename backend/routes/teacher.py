@@ -17,16 +17,57 @@ from core.dependencies import require_teacher
 router = APIRouter()
 
 
+from models.teacher_assignment import TeacherAssignment
+from models.class_model import Class
+
 @router.get("/dashboard")
 def teacher_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher),
 ):
-    students = (
-        db.query(Student)
-        .filter(Student.teacher_id == current_user.id)
+    # Fetch teacher's assignments
+    teacher_assignments = (
+        db.query(TeacherAssignment)
+        .filter(TeacherAssignment.teacher_id == current_user.id)
         .all()
     )
+    
+    assigned_class_ids = list(set(ta.class_id for ta in teacher_assignments if ta.class_id))
+    assigned_subjects = list(set(ta.subject for ta in teacher_assignments if ta.subject))
+    
+    if current_user.subject and current_user.subject not in assigned_subjects:
+        assigned_subjects.append(current_user.subject)
+        
+    assigned_classes = (
+        db.query(Class)
+        .filter(Class.id.in_(assigned_class_ids))
+        .all()
+        if assigned_class_ids else []
+    )
+    assigned_class_names = [c.name for c in assigned_classes]
+
+    # Find all students enrolled in teacher's assigned classes or directly assigned
+    enrolled_student_ids = []
+    if assigned_class_ids:
+        enrolled_student_ids = [
+            e.student_id for e in
+            db.query(Enrollment.student_id)
+            .filter(Enrollment.class_id.in_(assigned_class_ids))
+            .all()
+        ]
+        
+    student_query = db.query(Student)
+    if assigned_class_ids or assigned_class_names:
+        filters = [Student.teacher_id == current_user.id]
+        if enrolled_student_ids:
+            filters.append(Student.id.in_(enrolled_student_ids))
+        if assigned_class_names:
+            filters.append(Student.class_name.in_(assigned_class_names))
+        from sqlalchemy import or_
+        students = student_query.filter(or_(*filters)).distinct().all()
+    else:
+        students = student_query.filter(Student.teacher_id == current_user.id).all()
+        
     student_ids = [s.id for s in students]
 
     pending_grading = (
@@ -39,6 +80,9 @@ def teacher_dashboard(
         if student_ids
         else 0
     )
+
+    assignments_count = db.query(Assignment).filter(Assignment.teacher_id == current_user.id).count()
+    quizzes_count = db.query(Quiz).filter(Quiz.teacher_id == current_user.id).count()
 
     risk_counts = {"High": 0, "Medium": 0, "Low": 0}
     student_list = []
@@ -68,6 +112,9 @@ def teacher_dashboard(
         student_list.append({
             "id": student.id,
             "full_name": student.full_name,
+            "student_id": student.student_id,
+            "class_name": student.class_name,
+            "gender": student.gender,
             "avg_score": avg,
             "attendance_rate": attn,
             "risk_level": risk,
@@ -87,29 +134,28 @@ def teacher_dashboard(
     )
     ai_suggestions = []
     for p in suggestions:
-        student = db.query(Student).filter(Student.id == p.student_id).first()
-        if student:
+        st = db.query(Student).filter(Student.id == p.student_id).first()
+        if st:
             ai_suggestions.append({
-                "student_name": student.full_name,
+                "student_name": st.full_name,
                 "suggestion": p.ai_suggestion or p.reason,
             })
 
-    enrollment = (
-        db.query(Enrollment)
-        .join(Student, Enrollment.student_id == Student.id)
-        .filter(Student.teacher_id == current_user.id)
-        .first()
-    )
-    class_name = students[0].class_name if students else "No class"
+    classes_payload = [
+        {"id": c.id, "name": c.name, "course": c.course}
+        for c in assigned_classes
+    ]
 
     return {
         "teacher_name": current_user.full_name,
         "subject": current_user.subject,
-        "class_name": class_name,
-        "class_id": enrollment.class_id if enrollment else None,
-        "active_students": len(students),
+        "assigned_subjects": assigned_subjects,
+        "assigned_classes": classes_payload,
+        "active_classes": len(assigned_classes),
+        "total_students": len(students),
+        "assignments_count": assignments_count,
+        "quizzes_count": quizzes_count,
         "pending_grading": pending_grading,
-        "ai_drafts_pending": 0,
         "risk_counts": risk_counts,
         "students": student_list,
         "ai_suggestions": ai_suggestions,

@@ -1,17 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
 import { BookOpen, Sparkles, FileText, Download, Loader2 } from 'lucide-react';
 import { generateLessonNote, getMyLessonNotes } from '../../services/lessonNotesService';
+import { fetchMyClasses } from '../../services/teacherService';
 
 export default function LessonNoteGenerator() {
   const [topic, setTopic] = useState('');
   const [subject, setSubject] = useState('');
   const [classLevel, setClassLevel] = useState('');
-  const [duration, setDuration] = useState('');
+  const [assignedClasses, setAssignedClasses] = useState([]);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    loadClasses();
+  }, []);
+
+  const loadClasses = async () => {
+    try {
+      const res = await fetchMyClasses();
+      const classes = res.data || [];
+      setAssignedClasses(classes);
+      if (classes.length > 0) {
+        setClassLevel(classes[0].name);
+        setAvailableSubjects(classes[0].subjects || []);
+        if (classes[0].subjects?.length > 0) {
+          setSubject(classes[0].subjects[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load assigned classes:', err);
+    }
+  };
+
+  const handleClassChange = (selectedClassName) => {
+    setClassLevel(selectedClassName);
+    const cls = assignedClasses.find((c) => c.name === selectedClassName);
+    const subjects = cls?.subjects || [];
+    setAvailableSubjects(subjects);
+    if (subjects.length > 0) {
+      setSubject(subjects[0]);
+    } else {
+      setSubject('');
+    }
+  };
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -47,7 +82,10 @@ export default function LessonNoteGenerator() {
 
   return (
     <div>
-      <PageHeader title="Lesson Note Generator" subtitle="Generate AI-powered lesson notes for your classes" />
+      <PageHeader
+        title="Lesson Note Generator"
+        subtitle="Generate AI-powered lesson notes for your assigned classes for this semester"
+      />
 
       {success && (
         <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
@@ -67,76 +105,57 @@ export default function LessonNoteGenerator() {
             <div className="space-y-6">
               {/* Topic */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Lesson Topic
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Lesson Topic</label>
                 <input
                   type="text"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Enter the lesson topic"
+                  placeholder="Enter the lesson topic..."
                   className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   required
                 />
               </div>
 
-              {/* Subject */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Subject
-                </label>
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  required
-                >
-                  <option value="">Select subject</option>
-                  <option value="mathematics">Mathematics</option>
-                  <option value="english">English</option>
-                  <option value="science">Science</option>
-                  <option value="social-studies">Social Studies</option>
-                </select>
+              {/* Class & Subject */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Assigned Class</label>
+                  <select
+                    value={classLevel}
+                    onChange={(e) => handleClassChange(e.target.value)}
+                    className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    required
+                  >
+                    {assignedClasses.length === 0 && <option value="">No classes assigned</option>}
+                    {assignedClasses.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name} ({c.course || 'Core'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Assigned Subject</label>
+                  <select
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    required
+                  >
+                    {availableSubjects.length === 0 ? (
+                      <option value="">No subjects assigned for this class</option>
+                    ) : (
+                      availableSubjects.map((sub) => (
+                        <option key={sub} value={sub}>
+                          {sub}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
               </div>
 
-              {/* Class Level */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Class Level
-                </label>
-                <select
-                  value={classLevel}
-                  onChange={(e) => setClassLevel(e.target.value)}
-                  className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  required
-                >
-                  <option value="">Select class level</option>
-                  <option value="JHS-1">JHS 1</option>
-                  <option value="JHS-2">JHS 2</option>
-                  <option value="JHS-3">JHS 3</option>
-                </select>
-              </div>
-
-              {/* Duration */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Lesson Duration
-                </label>
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  required
-                >
-                  <option value="">Select duration</option>
-                  <option value="30">30 minutes</option>
-                  <option value="45">45 minutes</option>
-                  <option value="60">60 minutes</option>
-                  <option value="90">90 minutes</option>
-                </select>
-              </div>
-
-              {/* Generate Button */}
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
@@ -144,54 +163,45 @@ export default function LessonNoteGenerator() {
                   className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white text-sm font-medium rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-60"
                 >
                   {generating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating...
-                    </>
+                    <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Generate Lesson Note
-                    </>
+                    <Sparkles className="w-5 h-5" />
                   )}
+                  {generating ? 'Generating Note...' : 'Generate Lesson Note'}
                 </button>
               </div>
             </div>
           </form>
         ) : (
           <div className="edu-card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-emerald-500 flex items-center justify-center">
-                  <BookOpen className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">{topic}</h3>
-                  <p className="text-sm text-slate-500">{subject} • {classLevel} • {duration} minutes</p>
-                </div>
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">{topic}</h2>
+                <p className="text-sm text-slate-500">
+                  Subject: <span className="font-medium text-slate-700">{subject}</span> | Class:{' '}
+                  <span className="font-medium text-slate-700">{classLevel}</span>
+                </p>
               </div>
-              <button
-                onClick={handleDownload}
-                className="flex items-center gap-2 px-4 py-2 bg-[#0A192F] text-white text-sm font-medium rounded-lg hover:bg-[#0F2440] transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                Download
-              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setGeneratedContent('')}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                  Generate Another
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Note
+                </button>
+              </div>
             </div>
 
-            <div className="prose prose-slate max-w-none">
-              <pre className="whitespace-pre-wrap text-sm text-slate-700 bg-slate-50 p-6 rounded-xl">
-                {generatedContent}
-              </pre>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
-              <button
-                onClick={() => setGeneratedContent('')}
-                className="px-6 py-3 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
-              >
-                Generate New
-              </button>
+            <div className="prose max-w-none text-slate-700 whitespace-pre-wrap leading-relaxed text-sm bg-slate-50 p-6 rounded-xl border border-slate-200">
+              {generatedContent}
             </div>
           </div>
         )}

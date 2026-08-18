@@ -143,7 +143,7 @@ def get_class_compiled_transcripts(
                     "subject": sc.subject,
                     "score": round(sc.score, 1),
                     "grade": wassce_grade,
-                    "exam_type": sc.exam_type or "End of Term"
+                    "exam_type": sc.exam_type or "End of Semester"
                 })
         else:
             # Default core curriculum subjects if empty in dev
@@ -161,7 +161,7 @@ def get_class_compiled_transcripts(
                     "subject": subj,
                     "score": score_val,
                     "grade": get_wassce_grade(score_val),
-                    "exam_type": "End of Term"
+                    "exam_type": "End of Semester"
                 })
 
         avg_score = report.overall_average if (report and report.overall_average) else (
@@ -311,7 +311,7 @@ def generate_report_card(
     if settings.ANTHROPIC_API_KEY:
         try:
             prompt = f"""
-Write a formal, encouraging termly report card comment (3-4 sentences) for a Ghanaian SHS student.
+Write a formal, encouraging semestral report card comment (3-4 sentences) for a Ghanaian SHS student.
 Student: {student.full_name}
 Class: {student.class_name}
 Term: {data.term} {data.year}
@@ -345,9 +345,9 @@ Highlight their performance in Exams vs Continuous Assessment coursework, their 
 
     if not ai_comment:
         ai_comment = (
-            f"{student.full_name} attained a final weighted average of {final_score}% ({wassce_grade}) this term. "
+            f"{student.full_name} attained a final weighted average of {final_score}% ({wassce_grade}) this semester. "
             f"Exam score scaled to 50% is {exam_weighted}%, and Continuous Assessment (Quiz & Assignment total) scaled to 50% is {ca_weighted}%. "
-            f"Demonstrated good academic consistency and an attendance rate of {attendance_rate:.1f}%. Recommended to maintain diligent revision schedules for next term."
+            f"Demonstrated good academic consistency and an attendance rate of {attendance_rate:.1f}%. Recommended to maintain diligent revision schedules for next semester."
         )
 
     # Save to ReportCard table
@@ -416,14 +416,16 @@ def get_student_report_cards(
         ReportCard.student_id == student_id
     ).all()
 
-@router.get("/", response_model=List[ReportCardResponse])
-def get_all_report_cards(
-    term: str = "Term 2",
+@router.get("/summary/{class_id}")
+def get_class_summary(
+    class_id: int,
+    term: str = "Semester 2",
     year: int = 2025,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     return db.query(ReportCard).filter(
+        ReportCard.class_id == class_id,
         ReportCard.term == term,
         ReportCard.year == year
     ).all()

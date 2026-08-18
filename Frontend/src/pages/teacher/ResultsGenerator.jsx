@@ -37,8 +37,10 @@ export function calculateWASSCEGrade(score) {
   return { grade: 'F9', label: 'Fail', color: 'bg-rose-100 text-rose-800 border-rose-300' };
 }
 
+import { fetchMyClasses } from '../../services/teacherService';
+
 export default function ResultsGenerator() {
-  const [term, setTerm] = useState('1');
+  const [semester, setSemester] = useState('1');
   const [academicYear, setAcademicYear] = useState('2024-2025');
   const [selectedClass, setSelectedClass] = useState('');
   const [classList, setClassList] = useState([]);
@@ -55,17 +57,17 @@ export default function ResultsGenerator() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Fetch available classes on mount
+  // Fetch teacher's assigned classes on mount
   useEffect(() => {
-    fetchClasses()
+    fetchMyClasses()
       .then((res) => {
         if (res.data && res.data.length > 0) {
           setClassList(res.data);
           setSelectedClass(res.data[0].name);
         } else {
           // Default class fallback
-          setClassList([{ id: 1, name: 'Form 2 Science A' }, { id: 2, name: 'Form 1 Arts B' }]);
-          setSelectedClass('Form 2 Science A');
+          setClassList([{ id: 1, name: 'Form 2 Science 1' }]);
+          setSelectedClass('Form 2 Science 1');
         }
       })
       .catch(() => {
@@ -183,7 +185,7 @@ export default function ResultsGenerator() {
         try {
           const res = await generateReportCard({
             student_id: studentResult.id,
-            term: `Term ${term}`,
+            term: `Semester ${semester}`,
             year: parseInt(academicYear.split('-')[0]) || 2025,
             exam_score: studentResult.rawExam,
             quiz_score: studentResult.quiz_score,
@@ -201,7 +203,7 @@ export default function ResultsGenerator() {
       }
 
       setGeneratedResults({
-        term: `Term ${term}`,
+        term: `Semester ${semester}`,
         academicYear,
         className: selectedClass,
         students: generatedList
@@ -308,16 +310,15 @@ export default function ResultsGenerator() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-              Term
+              Semester
             </label>
             <select
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
+              value={semester}
+              onChange={(e) => setSemester(e.target.value)}
               className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
-              <option value="1">Term 1</option>
-              <option value="2">Term 2</option>
-              <option value="3">Term 3</option>
+              <option value="1">Semester 1</option>
+              <option value="2">Semester 2</option>
             </select>
           </div>
 
@@ -569,7 +570,7 @@ export default function ResultsGenerator() {
                   </div>
 
                   <p className="text-xs text-slate-600 italic bg-white p-2.5 rounded-lg border border-slate-200 mt-1">
-                    "{st.ai_comment || 'Good progress made during this academic term.'}"
+                    "{st.ai_comment || 'Good progress made during this academic semester.'}"
                   </p>
 
                   <div className="flex items-center gap-4 text-[11px] text-slate-500 pt-1">

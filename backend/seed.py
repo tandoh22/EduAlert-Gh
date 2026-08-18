@@ -14,33 +14,40 @@ from models.all_models import (
 from core.security import hash_password
 from ml.predictor import predict_student_risk
 
-Base.metadata.drop_all(bind=engine)
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.drop_all(bind=engine, checkfirst=True)
+except Exception:
+    pass
+
+Base.metadata.create_all(bind=engine, checkfirst=True)
 db = SessionLocal()
 
 print("Seeding EduAlert GH database...\n")
 
 # Clear existing tables for clean seed run if needed
-db.query(QuizAnswer).delete()
-db.query(QuizAttempt).delete()
-db.query(QuizQuestion).delete()
-db.query(Quiz).delete()
-db.query(Submission).delete()
-db.query(Assignment).delete()
-db.query(LessonNote).delete()
-db.query(StudyCardSet).delete()
-db.query(Resource).delete()
-db.query(Announcement).delete()
-db.query(ReportCard).delete()
-db.query(Prediction).delete()
-db.query(Score).delete()
-db.query(Attendance).delete()
-db.query(TeacherAssignment).delete()
-db.query(Enrollment).delete()
-db.query(Student).delete()
-db.query(Class).delete()
-db.query(User).delete()
-db.commit()
+try:
+    db.query(QuizAnswer).delete()
+    db.query(QuizAttempt).delete()
+    db.query(QuizQuestion).delete()
+    db.query(Quiz).delete()
+    db.query(Submission).delete()
+    db.query(Assignment).delete()
+    db.query(LessonNote).delete()
+    db.query(StudyCardSet).delete()
+    db.query(Resource).delete()
+    db.query(Announcement).delete()
+    db.query(ReportCard).delete()
+    db.query(Prediction).delete()
+    db.query(Score).delete()
+    db.query(Attendance).delete()
+    db.query(TeacherAssignment).delete()
+    db.query(Enrollment).delete()
+    db.query(Student).delete()
+    db.query(Class).delete()
+    db.query(User).delete()
+    db.commit()
+except Exception:
+    db.rollback()
 
 # 1. USERS — Teacher, Headmaster, and Student accounts
 teacher = User(
@@ -49,7 +56,7 @@ teacher = User(
     password_hash=hash_password("password123"),
     role="teacher",
     status="approved",
-    subject="Core Mathematics",
+    subject="Biology",
     school="Achimota Senior High School"
 )
 db.add(teacher)
@@ -91,7 +98,7 @@ class_2a = Class(
 db.add(class_2a)
 db.commit()
 db.refresh(class_2a)
-print("[OK] Class created (Form 2 Science A)")
+print("[OK] Class created (Form 2 Science 1)")
 
 db.add(TeacherAssignment(
     teacher_id=teacher.id,
