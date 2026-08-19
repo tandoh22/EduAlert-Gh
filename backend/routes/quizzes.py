@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import httpx
 import json
+import base64
 from database import get_db
 from models.quiz import Quiz, QuizQuestion, QuizAttempt, QuizAnswer
 from models.student import Student
@@ -18,7 +19,7 @@ from models.user import User
 router = APIRouter()
 
 def _generate_fallback_quiz_questions(subject: str, topic: str, count: int) -> List[dict]:
-    return [
+    base_questions = [
         {
             "question_text": f"What is the primary definition of {topic} in {subject}?",
             "question_type": "mcq",
@@ -71,49 +72,64 @@ def _generate_fallback_quiz_questions(subject: str, topic: str, count: int) -> L
         },
         {
             "question_text": f"True or False: {topic} plays a vital role in industrial applications across Ghana.",
-            "question_type": "true_false",
+            "question_type": "mcq",
             "option_a": "True",
             "option_b": "False",
-            "option_c": None,
-            "option_d": None,
-            "correct_answer": "True",
+            "option_c": "N/A",
+            "option_d": "N/A",
+            "correct_answer": "A",
             "marks": 1
         },
         {
             "question_text": f"True or False: Increasing temperature slows down reactions in {topic}.",
-            "question_type": "true_false",
+            "question_type": "mcq",
             "option_a": "True",
             "option_b": "False",
-            "option_c": None,
-            "option_d": None,
-            "correct_answer": "False",
+            "option_c": "N/A",
+            "option_d": "N/A",
+            "correct_answer": "B",
             "marks": 1
         },
         {
             "question_text": f"True or False: {topic} is part of the NaCCA SHS core syllabus.",
-            "question_type": "true_false",
+            "question_type": "mcq",
             "option_a": "True",
             "option_b": "False",
-            "option_c": None,
-            "option_d": None,
-            "correct_answer": "True",
+            "option_c": "N/A",
+            "option_d": "N/A",
+            "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"Explain the key steps involved in analyzing a problem related to {topic}.",
-            "question_type": "short_answer",
-            "option_a": None, "option_b": None, "option_c": None, "option_d": None,
-            "correct_answer": "Identify given variables, apply the correct formula, perform substitution, and state final units clearly.",
-            "marks": 3
+            "question_text": f"Which step is key when analyzing a problem related to {topic}?",
+            "question_type": "mcq",
+            "option_a": "Identify variables and apply standard formulas",
+            "option_b": "Ignore given parameters",
+            "option_c": "Multiply values randomly",
+            "option_d": "Omit final units",
+            "correct_answer": "A",
+            "marks": 1
         },
         {
-            "question_text": f"Describe one real-world application of {topic} in Ghana.",
-            "question_type": "short_answer",
-            "option_a": None, "option_b": None, "option_c": None, "option_d": None,
-            "correct_answer": "Applications include solar panel installations, agricultural processing, water quality monitoring, and mining engineering.",
-            "marks": 3
+            "question_text": f"What is a real-world application of {topic} in Ghana?",
+            "question_type": "mcq",
+            "option_a": "Solar energy, agriculture, and water processing",
+            "option_b": "Deep space propulsion",
+            "option_c": "Sub-zero ice mining",
+            "option_d": "Cosmological simulation",
+            "correct_answer": "A",
+            "marks": 1
         }
     ]
+
+    results = []
+    for i in range(count):
+        tmpl = base_questions[i % len(base_questions)]
+        q_copy = dict(tmpl)
+        if i >= len(base_questions):
+            q_copy["question_text"] = f"{q_copy['question_text']} (Question {i+1})"
+        results.append(q_copy)
+    return results
 
 @router.post("/", response_model=QuizResponse, status_code=201)
 def create_quiz(
@@ -238,6 +254,117 @@ Respond ONLY with a JSON array of 5 MCQ, 3 true_false, and 2 short_answer questi
     db.commit()
     return {
         "message": f"{saved_count} questions generated and saved",
+        "quiz_id": quiz_id,
+        "questions_count": saved_count
+    }
+
+@router.post("/generate-questions-from-file/{quiz_id}")
+async def generate_quiz_questions_from_file(
+    quiz_id: int,
+    num_questions: int = 10,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    quiz = db.query(Quiz).filter(
+        Quiz.id == quiz_id,
+        Quiz.teacher_id == current_user.id
+    ).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    file_bytes = await file.read()
+    file_text = ""
+    try:
+        file_text = file_bytes.decode("utf-8", errors="ignore")
+    except Exception:
+        file_text = ""
+
+    questions_data = None
+    if settings.ANTHROPIC_API_KEY:
+        try:
+            messages_content = []
+            if file.content_type == "application/pdf":
+                pdf_base64 = base64.b64encode(file_bytes).decode("utf-8")
+                messages_content.append({
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": pdf_base64
+                    }
+                })
+            elif file_text:
+                messages_content.append({"type": "text", "text": f"Uploaded Document Content:\n{file_text[:5000]}"})
+
+            prompt = f"""
+Generate {num_questions} Multiple Choice Questions (MCQs) for a quiz based on the attached document content.
+Subject: {quiz.subject}
+Topic: {quiz.topic or quiz.title}
+
+Respond ONLY with a valid JSON array of objects with schema:
+[
+  {{
+    "question_text": "...",
+    "question_type": "mcq",
+    "option_a": "...",
+    "option_b": "...",
+    "option_c": "...",
+    "option_d": "...",
+    "correct_answer": "A",
+    "marks": 1
+  }}
+]
+"""
+            messages_content.append({"type": "text", "text": prompt})
+            response = httpx.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": settings.ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 2000,
+                    "messages": [{"role": "user", "content": messages_content}]
+                },
+                timeout=30.0
+            )
+            data = response.json()
+            if "content" in data and len(data["content"]) > 0:
+                text = data["content"][0]["text"].strip()
+                text = text.replace("```json", "").replace("```", "").strip()
+                questions_data = json.loads(text)
+        except Exception as e:
+            print("AI file quiz generation error:", e)
+
+    if not questions_data:
+        topic_title = quiz.topic or quiz.title
+        if file.filename:
+            topic_title = f"{topic_title} (Extracted from {file.filename})"
+        questions_data = _generate_fallback_quiz_questions(quiz.subject, topic_title, num_questions)
+
+    saved_count = 0
+    for i, q in enumerate(questions_data, 1):
+        question = QuizQuestion(
+            quiz_id=quiz_id,
+            question_text=q["question_text"],
+            question_type=q.get("question_type", "mcq"),
+            option_a=q.get("option_a"),
+            option_b=q.get("option_b"),
+            option_c=q.get("option_c"),
+            option_d=q.get("option_d"),
+            correct_answer=q["correct_answer"],
+            marks=q.get("marks", 1),
+            order_num=i
+        )
+        db.add(question)
+        saved_count += 1
+
+    db.commit()
+    return {
+        "message": f"{saved_count} MCQ questions generated from '{file.filename}' and saved successfully!",
         "quiz_id": quiz_id,
         "questions_count": saved_count
     }

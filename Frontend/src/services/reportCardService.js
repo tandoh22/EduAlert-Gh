@@ -1,8 +1,8 @@
 import api from './api';
 
-export const fetchClassStudentScores = async (className) => {
+export const fetchClassStudentScores = async (className, subject) => {
   const response = await api.get('/report-cards/class-students-scores', {
-    params: { class_name: className }
+    params: { class_name: className, subject: subject }
   });
   return response.data;
 };

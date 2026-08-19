@@ -8,9 +8,11 @@ from models.report_card import ReportCard
 from models.student import Student
 from models.score import Score
 from models.attendance import Attendance
-from models.assignment import Submission
-from models.quiz import QuizAttempt
+from models.assignment import Submission, Assignment
+from models.quiz import QuizAttempt, Quiz
 from models.announcement import Announcement
+from models.class_model import Class
+from models.teacher_assignment import TeacherAssignment
 from schemas.report_card import ReportCardGenerate, ReportCardResponse, BulkResultsGenerate
 from core.dependencies import require_admin, require_teacher, get_current_user
 from core.config import settings
@@ -47,55 +49,108 @@ def get_wassce_grade(score: float) -> str:
 @router.get("/class-students-scores")
 def get_class_students_scores(
     class_name: Optional[str] = None,
+    subject: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher)
 ):
     """
-    Fetches students for teacher's class and calculates their total assignment 
-    and quiz scores from student portal database.
+    Fetches students for teacher's class and calculates their assignment 
+    and quiz scores strictly for the teacher's assigned subject.
     """
-    query = db.query(Student).filter(Student.teacher_id == current_user.id)
+    # Find teacher's assigned subjects for this class
+    target_class = None
     if class_name:
-        query = query.filter(Student.class_name == class_name)
-    
-    students = query.all()
+        target_class = db.query(Class).filter(Class.name == class_name).first()
+
+    teacher_assignments = db.query(TeacherAssignment).filter(
+        TeacherAssignment.teacher_id == current_user.id
+    )
+    if target_class:
+        teacher_assignments = teacher_assignments.filter(TeacherAssignment.class_id == target_class.id)
+
+    assigned_subjects = [ta.subject for ta in teacher_assignments.all() if ta.subject]
+
+    target_subject = subject
+    if not target_subject and assigned_subjects:
+        target_subject = assigned_subjects[0]
+    if not target_subject:
+        target_subject = current_user.subject or "Biology"
+
+    # Get students belonging to class_name
+    students_query = db.query(Student)
+    if class_name:
+        students_query = students_query.filter(Student.class_name == class_name)
+    students = students_query.all()
     if not students:
-        # Fallback to all students if teacher ID match is empty in dev
         students = db.query(Student).all()
 
     result = []
     for student in students:
-        # Fetch assignment submissions (teacher_score or ai_score)
-        submissions = db.query(Submission).filter(Submission.student_id == student.id).all()
+        # Fetch assignment submissions specifically for target_subject
+        submissions = (
+            db.query(Submission)
+            .join(Assignment, Submission.assignment_id == Assignment.id)
+            .filter(
+                Submission.student_id == student.id,
+                Assignment.subject == target_subject
+            )
+            .all()
+        )
         assignment_scores = [
             sub.teacher_score if sub.teacher_score is not None else sub.ai_score
             for sub in submissions
             if (sub.teacher_score is not None or sub.ai_score is not None)
         ]
-        assignment_avg = round(sum(assignment_scores) / len(assignment_scores), 1) if assignment_scores else 80.0
+        has_assignments = len(assignment_scores) > 0
+        assignment_avg = round(sum(assignment_scores) / len(assignment_scores), 1) if has_assignments else 0.0
 
-        # Fetch completed quiz attempts
-        attempts = db.query(QuizAttempt).filter(
-            QuizAttempt.student_id == student.id,
-            QuizAttempt.is_completed == True
-        ).all()
+        # Fetch completed quiz attempts specifically for target_subject
+        attempts = (
+            db.query(QuizAttempt)
+            .join(Quiz, QuizAttempt.quiz_id == Quiz.id)
+            .filter(
+                QuizAttempt.student_id == student.id,
+                QuizAttempt.is_completed == True,
+                Quiz.subject == target_subject
+            )
+            .all()
+        )
         quiz_scores = [att.percentage for att in attempts if att.percentage is not None]
-        quiz_avg = round(sum(quiz_scores) / len(quiz_scores), 1) if quiz_scores else 75.0
+        has_quizzes = len(quiz_scores) > 0
+        quiz_avg = round(sum(quiz_scores) / len(quiz_scores), 1) if has_quizzes else 0.0
 
-        # Continuous Assessment score (0 - 100%)
-        ca_score = round((assignment_avg + quiz_avg) / 2, 1)
-        ca_weighted = round(ca_score * 0.5, 1) # 50% weight
+        # Fetch existing score record for this student and target_subject if any
+        existing_score = db.query(Score).filter(
+            Score.student_id == student.id,
+            Score.subject == target_subject
+        ).order_by(Score.id.desc()).first()
+
+        if has_assignments and has_quizzes:
+            ca_score = round((assignment_avg + quiz_avg) / 2, 1)
+        elif has_assignments:
+            ca_score = assignment_avg
+        elif has_quizzes:
+            ca_score = quiz_avg
+        else:
+            ca_score = 0.0
+
+        ca_weighted = round(ca_score * 0.5, 1)
+
+        default_exam = (
+            existing_score.score if existing_score else (75.0 if (has_assignments or has_quizzes) else 0.0)
+        )
 
         result.append({
             "id": student.id,
             "student_id": student.student_id or f"STD2025{student.id:03d}",
             "full_name": student.full_name,
             "class_name": student.class_name,
+            "subject": target_subject,
             "assignment_score": assignment_avg,
             "quiz_score": quiz_avg,
             "ca_score": ca_score,
             "ca_weighted": ca_weighted,
-            "default_exam_score": 75.0
+            "default_exam_score": default_exam
         })
 
     return result
@@ -267,31 +322,54 @@ def generate_report_card(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # 1. Fetch assignment scores from Student Portal
-    submissions = db.query(Submission).filter(Submission.student_id == data.student_id).all()
+    target_subject = getattr(data, 'subject', None) or current_user.subject or "Biology"
+
+    # 1. Fetch assignment scores from Student Portal for target_subject
+    submissions = (
+        db.query(Submission)
+        .join(Assignment, Submission.assignment_id == Assignment.id)
+        .filter(
+            Submission.student_id == data.student_id,
+            Assignment.subject == target_subject
+        )
+        .all()
+    )
     assignment_scores = [
         sub.teacher_score if sub.teacher_score is not None else sub.ai_score
         for sub in submissions
         if (sub.teacher_score is not None or sub.ai_score is not None)
     ]
-    assignment_avg = data.assignment_score if data.assignment_score is not None else (
-        round(sum(assignment_scores) / len(assignment_scores), 1) if assignment_scores else 80.0
+    assignment_avg = data.assignment_score if (data.assignment_score is not None and data.assignment_score > 0) else (
+        round(sum(assignment_scores) / len(assignment_scores), 1) if assignment_scores else 0.0
     )
 
-    # 2. Fetch quiz scores from Student Portal
-    attempts = db.query(QuizAttempt).filter(
-        QuizAttempt.student_id == data.student_id,
-        QuizAttempt.is_completed == True
-    ).all()
+    # 2. Fetch quiz scores from Student Portal for target_subject
+    attempts = (
+        db.query(QuizAttempt)
+        .join(Quiz, QuizAttempt.quiz_id == Quiz.id)
+        .filter(
+            QuizAttempt.student_id == data.student_id,
+            QuizAttempt.is_completed == True,
+            Quiz.subject == target_subject
+        )
+        .all()
+    )
     quiz_scores = [att.percentage for att in attempts if att.percentage is not None]
-    quiz_avg = data.quiz_score if data.quiz_score is not None else (
-        round(sum(quiz_scores) / len(quiz_scores), 1) if quiz_scores else 75.0
+    quiz_avg = data.quiz_score if (data.quiz_score is not None and data.quiz_score > 0) else (
+        round(sum(quiz_scores) / len(quiz_scores), 1) if quiz_scores else 0.0
     )
 
     # 3. Calculate 50% Exam & 50% Coursework (Quizzes + Assignments)
-    raw_exam = data.exam_score if data.exam_score is not None else 75.0
-    ca_score = round((assignment_avg + quiz_avg) / 2, 1)
-    
+    raw_exam = data.exam_score if data.exam_score is not None else 0.0
+    if assignment_avg > 0 and quiz_avg > 0:
+        ca_score = round((assignment_avg + quiz_avg) / 2, 1)
+    elif assignment_avg > 0:
+        ca_score = assignment_avg
+    elif quiz_avg > 0:
+        ca_score = quiz_avg
+    else:
+        ca_score = 0.0
+
     exam_weighted = round(raw_exam * 0.50, 1)
     ca_weighted = round(ca_score * 0.50, 1)
     final_score = round(exam_weighted + ca_weighted, 1)
@@ -386,6 +464,27 @@ Highlight their performance in Exams vs Continuous Assessment coursework, their 
         report_card.grade = wassce_grade
         report_card.ai_comment = ai_comment
         report_card.teacher_comment = ai_comment
+
+    # Save or update Score record specifically for this subject
+    score_rec = db.query(Score).filter(
+        Score.student_id == data.student_id,
+        Score.subject == target_subject,
+        Score.term == data.term,
+        Score.year == data.year
+    ).first()
+
+    if not score_rec:
+        score_rec = Score(
+            student_id=data.student_id,
+            subject=target_subject,
+            score=final_score,
+            term=data.term,
+            year=data.year,
+            exam_type="End of Semester"
+        )
+        db.add(score_rec)
+    else:
+        score_rec.score = final_score
 
     db.commit()
     db.refresh(report_card)

@@ -278,6 +278,26 @@ export default function App() {
           }
         />
         <Route
+          path="/teacher/predictions"
+          element={
+            <ProtectedRoute>
+              <TeacherLayout>
+                <Predictions />
+              </TeacherLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/teacher/students"
+          element={
+            <ProtectedRoute>
+              <TeacherLayout>
+                <StudentLists />
+              </TeacherLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/teacher/submissions"
           element={
             <ProtectedRoute>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
-import { BookOpen, Sparkles, FileText, Download, Loader2 } from 'lucide-react';
-import { generateLessonNote, getMyLessonNotes } from '../../services/lessonNotesService';
+import { BookOpen, Sparkles, FileText, Download, Loader2, Upload, X, CheckCircle2 } from 'lucide-react';
+import { generateLessonNote } from '../../services/lessonNotesService';
 import { fetchMyClasses } from '../../services/teacherService';
 
 export default function LessonNoteGenerator() {
@@ -10,6 +10,8 @@ export default function LessonNoteGenerator() {
   const [classLevel, setClassLevel] = useState('');
   const [assignedClasses, setAssignedClasses] = useState([]);
   const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState('');
   const [error, setError] = useState('');
@@ -48,6 +50,29 @@ export default function LessonNoteGenerator() {
     }
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setUploadedFile(e.target.files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setUploadedFile(e.dataTransfer.files[0]);
+    }
+  };
+
   const handleGenerate = async (e) => {
     e.preventDefault();
     setGenerating(true);
@@ -59,6 +84,7 @@ export default function LessonNoteGenerator() {
       formData.append('subject', subject);
       formData.append('topic', topic);
       if (classLevel) formData.append('class_level', classLevel);
+      if (uploadedFile) formData.append('file', uploadedFile);
 
       const result = await generateLessonNote(formData);
       setGeneratedContent(result.content);
@@ -84,12 +110,15 @@ export default function LessonNoteGenerator() {
     <div>
       <PageHeader
         title="Lesson Note Generator"
-        subtitle="Generate AI-powered lesson notes for your assigned classes for this semester"
+        subtitle="Generate AI-powered lesson notes for your assigned classes using topic or uploaded document files"
       />
 
       {success && (
-        <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-          <p className="text-sm font-medium text-emerald-800">Lesson note generated successfully!</p>
+        <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <p className="text-sm font-medium text-emerald-800">
+            Structured lesson note generated successfully based on NaCCA curriculum guidelines!
+          </p>
         </div>
       )}
 
@@ -105,12 +134,14 @@ export default function LessonNoteGenerator() {
             <div className="space-y-6">
               {/* Topic */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Lesson Topic</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Lesson Topic <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Enter the lesson topic..."
+                  placeholder="e.g., Photosynthesis & Plant Biochemistry"
                   className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   required
                 />
@@ -119,28 +150,32 @@ export default function LessonNoteGenerator() {
               {/* Class & Subject */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Assigned Class</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Class <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={classLevel}
                     onChange={(e) => handleClassChange(e.target.value)}
-                    className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
                     required
                   >
                     {assignedClasses.length === 0 && <option value="">No classes assigned</option>}
                     {assignedClasses.map((c) => (
                       <option key={c.id} value={c.name}>
-                        {c.name} ({c.course || 'Core'})
+                        Class: {c.name} ({c.course || 'SHS'})
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Assigned Subject</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Subject <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
                     required
                   >
                     {availableSubjects.length === 0 ? (
@@ -156,6 +191,59 @@ export default function LessonNoteGenerator() {
                 </div>
               </div>
 
+              {/* Document File Drag & Drop Upload Zone */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Attach Reference File / Syllabus (Optional PDF, DOCX, TXT)
+                </label>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer ${
+                    isDragging
+                      ? 'border-emerald-500 bg-emerald-50/50'
+                      : 'border-slate-300 hover:border-emerald-500 bg-slate-50/50'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    onChange={handleFileChange}
+                    accept=".pdf,.docx,.txt"
+                    className="hidden"
+                    id="lesson-file-upload"
+                  />
+                  <label htmlFor="lesson-file-upload" className="cursor-pointer">
+                    <Upload className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                    <p className="text-sm font-medium text-slate-700">
+                      {uploadedFile ? uploadedFile.name : 'Click to select or drag & drop reference file'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Upload NaCCA textbook pages, syllabus, or lecture slides
+                    </p>
+                  </label>
+                </div>
+
+                {uploadedFile && (
+                  <div className="mt-3 flex items-center justify-between p-3 bg-slate-100 rounded-lg text-xs text-slate-700 border border-slate-200">
+                    <div className="flex items-center gap-2 truncate">
+                      <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-semibold truncate">{uploadedFile.name}</span>
+                      <span className="text-slate-400">
+                        ({(uploadedFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUploadedFile(null)}
+                      className="text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
@@ -167,7 +255,7 @@ export default function LessonNoteGenerator() {
                   ) : (
                     <Sparkles className="w-5 h-5" />
                   )}
-                  {generating ? 'Generating Note...' : 'Generate Lesson Note'}
+                  {generating ? 'Generating Lesson Note...' : 'Generate Lesson Note'}
                 </button>
               </div>
             </div>

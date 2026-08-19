@@ -6,6 +6,7 @@ class ReportCardGenerate(BaseModel):
     student_id: int
     term: str
     year: int
+    subject: Optional[str] = None
     exam_score: Optional[float] = None
     quiz_score: Optional[float] = None
     assignment_score: Optional[float] = None

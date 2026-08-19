@@ -12,6 +12,16 @@ export const generateQuizQuestions = async (quizId, numQuestions = 10) => {
   return response.data;
 };
 
+export const generateQuizQuestionsFromFile = async (quizId, file, numQuestions = 10) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post(`/quizzes/generate-questions-from-file/${quizId}`, formData, {
+    params: { num_questions: numQuestions },
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
 export const addQuestionManually = async (quizId, data) => {
   const response = await api.post(`/quizzes/${quizId}/questions`, data);
   return response.data;

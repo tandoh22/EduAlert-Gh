@@ -21,7 +21,7 @@ import {
   getAllReportCards,
   deleteReportCard
 } from '../../services/reportCardService';
-import { fetchClasses } from '../../services/headmasterService';
+import { fetchMyClasses } from '../../services/teacherService';
 
 // WASSCE Grade Mapping function (0 to 100%)
 export function calculateWASSCEGrade(score) {
@@ -37,13 +37,13 @@ export function calculateWASSCEGrade(score) {
   return { grade: 'F9', label: 'Fail', color: 'bg-rose-100 text-rose-800 border-rose-300' };
 }
 
-import { fetchMyClasses } from '../../services/teacherService';
-
 export default function ResultsGenerator() {
   const [semester, setSemester] = useState('1');
   const [academicYear, setAcademicYear] = useState('2024-2025');
   const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [classList, setClassList] = useState([]);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
   
   const [students, setStudents] = useState([]);
   const [examScores, setExamScores] = useState({});
@@ -57,59 +57,63 @@ export default function ResultsGenerator() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Fetch teacher's assigned classes on mount
+  // Fetch teacher's assigned classes & subjects on mount
   useEffect(() => {
     fetchMyClasses()
       .then((res) => {
-        if (res.data && res.data.length > 0) {
-          setClassList(res.data);
-          setSelectedClass(res.data[0].name);
+        const classes = res.data || [];
+        if (classes.length > 0) {
+          setClassList(classes);
+          setSelectedClass(classes[0].name);
+          const subs = classes[0].subjects || [];
+          setAvailableSubjects(subs);
+          setSelectedSubject(subs.length > 0 ? subs[0] : '');
         } else {
           // Default class fallback
-          setClassList([{ id: 1, name: 'Form 2 Science 1' }]);
+          setClassList([{ id: 1, name: 'Form 2 Science 1', subjects: ['Biology'] }]);
           setSelectedClass('Form 2 Science 1');
+          setAvailableSubjects(['Biology']);
+          setSelectedSubject('Biology');
         }
       })
       .catch(() => {
-        setClassList([{ id: 1, name: 'Form 2 Science A' }, { id: 2, name: 'Form 1 Arts B' }]);
-        setSelectedClass('Form 2 Science A');
+        setClassList([{ id: 1, name: 'Form 2 Science 1', subjects: ['Biology'] }]);
+        setSelectedClass('Form 2 Science 1');
+        setAvailableSubjects(['Biology']);
+        setSelectedSubject('Biology');
       });
   }, []);
 
-  // Fetch students continuous assessment scores when class changes
+  const handleClassChange = (className) => {
+    setSelectedClass(className);
+    const cls = classList.find((c) => c.name === className);
+    const subs = cls?.subjects || [];
+    setAvailableSubjects(subs);
+    setSelectedSubject(subs.length > 0 ? subs[0] : '');
+  };
+
+  // Fetch students continuous assessment scores when class or subject changes
   useEffect(() => {
     if (!selectedClass) return;
     loadStudentScores();
-  }, [selectedClass]);
+  }, [selectedClass, selectedSubject]);
 
   const loadStudentScores = async () => {
     setLoadingStudents(true);
     setError('');
     try {
-      const data = await fetchClassStudentScores(selectedClass);
+      const data = await fetchClassStudentScores(selectedClass, selectedSubject);
       setStudents(data);
-      // Initialize default exam scores from backend or 75
+      // Initialize default exam scores from backend or 0
       const initialExamScores = {};
       data.forEach((s) => {
-        initialExamScores[s.id] = s.default_exam_score || 75;
+        initialExamScores[s.id] = s.default_exam_score || 0;
       });
       setExamScores(initialExamScores);
     } catch (err) {
       console.error('Error fetching student scores:', err);
-      // Demo fallback if backend database is empty
-      const demoStudents = [
-        { id: 1, student_id: 'ACH2025001', full_name: 'Kwame Mensah', class_name: selectedClass || 'Form 2 Science A', assignment_score: 88, quiz_score: 82, ca_score: 85, ca_weighted: 42.5, default_exam_score: 80 },
-        { id: 2, student_id: 'ACH2025002', full_name: 'Ama Serwaa', class_name: selectedClass || 'Form 2 Science A', assignment_score: 92, quiz_score: 90, ca_score: 91, ca_weighted: 45.5, default_exam_score: 88 },
-        { id: 3, student_id: 'ACH2025003', full_name: 'Kofi Owusu', class_name: selectedClass || 'Form 2 Science A', assignment_score: 70, quiz_score: 64, ca_score: 67, ca_weighted: 33.5, default_exam_score: 68 },
-        { id: 4, student_id: 'ACH2025004', full_name: 'Abena Appiah', class_name: selectedClass || 'Form 2 Science A', assignment_score: 55, quiz_score: 50, ca_score: 52.5, ca_weighted: 26.25, default_exam_score: 54 },
-        { id: 5, student_id: 'ACH2025005', full_name: 'Yaw Boateng', class_name: selectedClass || 'Form 2 Science A', assignment_score: 38, quiz_score: 40, ca_score: 39, ca_weighted: 19.5, default_exam_score: 36 },
-      ];
-      setStudents(demoStudents);
-      const initialExamScores = {};
-      demoStudents.forEach((s) => {
-        initialExamScores[s.id] = s.default_exam_score;
-      });
-      setExamScores(initialExamScores);
+      setStudents([]);
+      setExamScores({});
     } finally {
       setLoadingStudents(false);
     }
@@ -123,13 +127,16 @@ export default function ResultsGenerator() {
     }));
   };
 
-  // Live calculations for students
+  // Compute calculated grades for each student (50% Exam + 50% CA)
   const studentCalculatedResults = useMemo(() => {
     return students.map((s) => {
-      const rawExam = examScores[s.id] !== undefined ? examScores[s.id] : 75;
-      const examWeighted = rawExam * 0.50; // 50% Exam weight
-      const caWeighted = s.ca_score * 0.50;  // 50% Quiz + Assignment weight
+      const rawExam = examScores[s.id] !== undefined ? examScores[s.id] : 0;
+      const caScore = s.ca_score || 0;
+      
+      const examWeighted = Math.round((rawExam * 0.50) * 10) / 10;
+      const caWeighted = Math.round((caScore * 0.50) * 10) / 10;
       const finalScore = Math.round((examWeighted + caWeighted) * 10) / 10;
+      
       const gradeInfo = calculateWASSCEGrade(finalScore);
 
       return {
@@ -145,6 +152,7 @@ export default function ResultsGenerator() {
     });
   }, [students, examScores]);
 
+  // Filter students based on search term
   const filteredStudents = useMemo(() => {
     if (!searchTerm) return studentCalculatedResults;
     const termLower = searchTerm.toLowerCase();
@@ -187,17 +195,17 @@ export default function ResultsGenerator() {
             student_id: studentResult.id,
             term: `Semester ${semester}`,
             year: parseInt(academicYear.split('-')[0]) || 2025,
+            subject: selectedSubject,
             exam_score: studentResult.rawExam,
             quiz_score: studentResult.quiz_score,
             assignment_score: studentResult.assignment_score
           });
           generatedList.push({ ...studentResult, reportId: res.id, ai_comment: res.ai_comment });
         } catch (err) {
-          // If singular call fails, retain calculated client result
           generatedList.push({
             ...studentResult,
             reportId: Math.floor(Math.random() * 1000) + 10,
-            ai_comment: `${studentResult.full_name} achieved a final score of ${studentResult.finalScore}% (${studentResult.grade}). Exam score (50%): ${studentResult.examWeighted}%, Continuous Assessment (50%): ${studentResult.caWeighted}%.`
+            ai_comment: `${studentResult.full_name} achieved a final score of ${studentResult.finalScore}% (${studentResult.grade}) in ${selectedSubject}.`
           });
         }
       }
@@ -206,10 +214,11 @@ export default function ResultsGenerator() {
         term: `Semester ${semester}`,
         academicYear,
         className: selectedClass,
+        subject: selectedSubject,
         students: generatedList
       });
 
-      setSuccess('Results successfully calculated and saved with AI performance remarks!');
+      setSuccess(`Results for ${selectedSubject} successfully calculated and saved with AI performance remarks!`);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate results.');
     } finally {
@@ -218,26 +227,33 @@ export default function ResultsGenerator() {
   };
 
   const handleDownloadPDF = (reportId) => {
-    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    window.open(`${backendUrl}/api/report-cards/${reportId || 1}/pdf`, '_blank');
+    window.open(`/api/report-cards/${reportId}/pdf`, '_blank');
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Results Generator"
-        subtitle="Input student examination scores, auto-sync Continuous Assessment (Quizzes & Assignments) from the student portal, and generate final WASSCE grades."
+        title="Teacher Results & Grade Generator"
+        subtitle="Input student examination scores for your assigned subject, sync Continuous Assessment (Quizzes & Assignments) from the student portal, and generate final WASSCE grades."
       />
 
-      {/* Grading Scale Legend Pill */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-4 rounded-2xl border border-slate-700/60 shadow-lg text-white">
-        <div className="flex items-center gap-2 mb-2 font-semibold text-emerald-400 text-xs uppercase tracking-wider">
-          <Award className="w-4 h-4 text-emerald-400" />
-          <span>WASSCE Official Grading Scale System</span>
+      {/* WASSCE Grading Legend Banner */}
+      <div className="edu-card p-5 bg-gradient-to-r from-slate-900 via-[#0F2440] to-slate-900 text-white">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="w-5 h-5 text-emerald-400" />
+            <h3 className="font-bold text-sm text-white">
+              Official NaCCA / WASSCE 50-50 Grading Formula
+            </h3>
+          </div>
+          <span className="text-xs px-3 py-1 bg-emerald-500/20 text-emerald-300 font-semibold rounded-full border border-emerald-500/30">
+            50% End-of-Semester Exam + 50% Continuous Assessment (CA)
+          </span>
         </div>
-        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5 text-center text-xs">
+
+        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2 text-center text-xs">
           <div className="p-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40">
-            <span className="font-bold text-emerald-300 block">A1</span>
+            <span className="font-bold text-emerald-400 block">A1</span>
             <span className="text-[10px] text-slate-300">80 - 100%</span>
           </div>
           <div className="p-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40">
@@ -288,23 +304,44 @@ export default function ResultsGenerator() {
         </div>
       )}
 
-      {/* Class and Academic Year Selection Controls */}
+      {/* Class, Subject and Academic Year Selection Controls */}
       <div className="edu-card p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
               Class Section
             </label>
             <select
               value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              onChange={(e) => handleClassChange(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
             >
               {classList.map((c) => (
                 <option key={c.id} value={c.name}>
                   {c.name}
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
+              Assigned Subject
+            </label>
+            <select
+              value={selectedSubject}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+            >
+              {availableSubjects.length === 0 ? (
+                <option value="">No subjects assigned</option>
+              ) : (
+                availableSubjects.map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -347,64 +384,68 @@ export default function ResultsGenerator() {
             <Calculator className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">{summaryStats.classAverage}%</div>
-          <p className="text-[11px] text-emerald-400 mt-1">Weighted 50% Exam + 50% CA</p>
+          <p className="text-[11px] text-emerald-400 mt-1">Subject: {selectedSubject || 'N/A'}</p>
         </div>
 
-        <div className="edu-card p-5">
+        <div className="edu-card p-5 bg-white border border-slate-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-slate-500 uppercase">Highest Score</span>
-            <Award className="w-4 h-4 text-emerald-600" />
+            <Award className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-3xl font-extrabold text-slate-900">{summaryStats.highestScore}%</div>
-          <p className="text-[11px] text-slate-500 mt-1">Best student performance</p>
+          <p className="text-[11px] text-slate-500 mt-1">Top WASSCE Grade</p>
         </div>
 
-        <div className="edu-card p-5">
+        <div className="edu-card p-5 bg-white border border-slate-200">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 uppercase">Total Students</span>
-            <GraduationCap className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-semibold text-slate-500 uppercase">Pass Count</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="text-3xl font-extrabold text-slate-900">{studentCalculatedResults.length}</div>
-          <p className="text-[11px] text-slate-500 mt-1">{summaryStats.totalPasses} Passed (A1-E8)</p>
+          <div className="text-3xl font-extrabold text-emerald-600">
+            {summaryStats.totalPasses} / {studentCalculatedResults.length}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Grades A1 to E8</p>
         </div>
 
-        <div className="edu-card p-5 bg-emerald-50 border-emerald-100">
+        <div className="edu-card p-5 bg-white border border-slate-200">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-emerald-800 uppercase">A1 Grade Count</span>
-            <Sparkles className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs font-semibold text-slate-500 uppercase">A1 Grade Count</span>
+            <Sparkles className="w-4 h-4 text-purple-500" />
           </div>
-          <div className="text-3xl font-extrabold text-emerald-900">{summaryStats.gradeDist['A1'] || 0}</div>
-          <p className="text-[11px] text-emerald-700 mt-1">Excellent grade achievers</p>
+          <div className="text-3xl font-extrabold text-purple-600 font-mono">
+            {summaryStats.gradeDist['A1'] || 0}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Excellent (80% +)</p>
         </div>
       </div>
 
       {/* Main Table: Input Student Exam Scores & View Fetched Portal Scores */}
-      <div className="edu-card overflow-hidden">
-        <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+      <div className="edu-card p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-emerald-600" />
-              Student Results & Continuous Assessment Entry
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Continuous Assessment (Assignments & Quizzes) auto-calculated from Student Portal records. Enter or tweak exam score to strike 50/50.
+            <h2 className="text-lg font-bold text-slate-900">
+              Student Examination & CA Scores — {selectedSubject || 'Subject'} ({selectedClass})
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Type or adjust the End-of-Semester Exam score for your assigned subject. Continuous Assessment (CA) scores auto-sync from student submissions for {selectedSubject}.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search student..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                placeholder="Search student..."
+                className="pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </div>
+
             <button
               onClick={loadStudentScores}
-              className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200"
               title="Sync Student Portal Scores"
             >
               <RefreshCw className={`w-4 h-4 ${loadingStudents ? 'animate-spin' : ''}`} />
@@ -413,180 +454,155 @@ export default function ResultsGenerator() {
         </div>
 
         {loadingStudents ? (
-          <div className="p-12 text-center text-slate-500 flex flex-col items-center gap-3">
-            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-            <p className="text-sm font-medium">Fetching Quiz & Assignment Scores from Student Portal...</p>
-          </div>
-        ) : filteredStudents.length === 0 ? (
-          <div className="p-12 text-center text-slate-500">
-            <p className="text-sm font-medium">No student records found.</p>
+          <div className="py-12 text-center text-slate-500">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
+            <p className="text-sm font-medium">Fetching Quiz & Assignment Scores for {selectedSubject}...</p>
           </div>
         ) : (
           <form onSubmit={handleGenerateResults}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-100/70 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                    <th className="px-4 py-3.5">Student Details</th>
-                    <th className="px-4 py-3.5 text-center">Assignments (100%)</th>
-                    <th className="px-4 py-3.5 text-center">Quizzes (100%)</th>
-                    <th className="px-4 py-3.5 text-center bg-blue-50/60 text-blue-900">CA Total (50%)</th>
-                    <th className="px-4 py-3.5 text-center bg-emerald-50/60 text-emerald-900">Exam Input (100%)</th>
-                    <th className="px-4 py-3.5 text-center bg-emerald-50/60 text-emerald-900">Exam (50%)</th>
-                    <th className="px-4 py-3.5 text-center font-extrabold text-slate-900">Final Total (100%)</th>
-                    <th className="px-4 py-3.5 text-center">WASSCE Grade</th>
+            <div className="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="bg-slate-100 text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Student Name / ID</th>
+                    <th className="px-4 py-3 text-center">Quiz Avg ({selectedSubject})</th>
+                    <th className="px-4 py-3 text-center">Assignment Avg ({selectedSubject})</th>
+                    <th className="px-4 py-3 text-center bg-slate-200/60">CA Score (50%)</th>
+                    <th className="px-4 py-3 text-center text-emerald-700 font-bold bg-emerald-50/70">
+                      Exam Score (100%) *
+                    </th>
+                    <th className="px-4 py-3 text-center">Exam Struck (50%)</th>
+                    <th className="px-4 py-3 text-center bg-slate-900 text-white">Final Score</th>
+                    <th className="px-4 py-3 text-center">WASSCE Grade</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {filteredStudents.map((student) => (
-                    <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Student Info */}
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-[#0A192F] text-white flex items-center justify-center text-xs font-bold shrink-0">
-                            {student.full_name.split(' ').map((n) => n[0]).join('')}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-slate-900 leading-snug">{student.full_name}</p>
-                            <p className="text-xs text-slate-500">{student.student_id}</p>
-                          </div>
-                        </div>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                        No enrolled students found for {selectedClass} and {selectedSubject}.
                       </td>
-
-                      {/* Auto-fetched Assignment Score */}
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="font-medium text-slate-700">{student.assignment_score}%</span>
-                      </td>
-
-                      {/* Auto-fetched Quiz Score */}
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="font-medium text-slate-700">{student.quiz_score}%</span>
-                      </td>
-
-                      {/* Continuous Assessment (CA) 50% Portion */}
-                      <td className="px-4 py-3.5 text-center bg-blue-50/30">
-                        <div className="font-bold text-blue-900">{student.caWeighted}%</div>
-                        <span className="text-[10px] text-blue-600 font-medium">({student.ca_score}% raw)</span>
-                      </td>
-
-                      {/* Teacher Exam Input (Raw out of 100%) */}
-                      <td className="px-4 py-3.5 text-center bg-emerald-50/30">
-                        <div className="flex justify-center">
+                    </tr>
+                  ) : (
+                    filteredStudents.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">{s.full_name}</div>
+                          <div className="text-xs text-slate-400 font-mono">{s.student_id}</div>
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono font-medium">
+                          {s.quiz_score}%
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono font-medium">
+                          {s.assignment_score}%
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono font-bold bg-slate-50 text-slate-900">
+                          {s.caWeighted}%
+                          <span className="text-[10px] text-slate-400 block font-normal">
+                            raw: {s.ca_score}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center bg-emerald-50/40">
                           <input
                             type="number"
                             min="0"
                             max="100"
-                            value={student.rawExam}
-                            onChange={(e) => handleExamScoreChange(student.id, e.target.value)}
-                            className="w-20 px-2.5 py-1.5 text-center font-bold text-slate-900 bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            value={examScores[s.id] !== undefined ? examScores[s.id] : 0}
+                            onChange={(e) => handleExamScoreChange(s.id, e.target.value)}
+                            className="w-20 px-3 py-1.5 text-center font-bold text-slate-900 bg-white border-2 border-emerald-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
                             required
                           />
-                        </div>
-                      </td>
-
-                      {/* Exam 50% Portion */}
-                      <td className="px-4 py-3.5 text-center bg-emerald-50/30 font-bold text-emerald-800">
-                        {student.examWeighted}%
-                      </td>
-
-                      {/* Final Combined Total (100%) */}
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="text-base font-extrabold text-slate-900">{student.finalScore}%</span>
-                      </td>
-
-                      {/* Final WASSCE Grade Badge */}
-                      <td className="px-4 py-3.5 text-center">
-                        <span
-                          className={`inline-flex flex-col items-center px-3 py-1 rounded-xl text-xs font-bold border shadow-xs ${student.gradeColor}`}
-                        >
-                          <span className="text-sm leading-tight">{student.grade}</span>
-                          <span className="text-[9px] font-medium uppercase">{student.gradeLabel}</span>
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono font-semibold text-slate-700">
+                          {s.examWeighted}%
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono font-extrabold text-base bg-slate-900 text-emerald-400">
+                          {s.finalScore}%
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-extrabold border ${s.gradeColor}`}
+                          >
+                            {s.grade} ({s.gradeLabel})
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-200">
+              <p className="text-xs text-slate-500 flex items-center gap-1">
                 <Info className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Formula: Final Grade = (Raw Exam × 0.50) + (Continuous Assessment × 0.50)</span>
-              </div>
+                Submitting calculates WASSCE grades for {selectedSubject} and generates AI performance remarks.
+              </p>
 
               <button
                 type="submit"
-                disabled={generating}
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-60"
+                disabled={generating || studentCalculatedResults.length === 0}
+                className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white font-semibold text-sm rounded-xl hover:bg-emerald-600 transition-all disabled:opacity-60 shadow-lg shadow-emerald-500/20"
               >
                 {generating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating AI Remarks & Final Results...
-                  </>
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-emerald-200" />
-                    Generate & Save Results with AI Remarks
-                  </>
+                  <Sparkles className="w-5 h-5 text-amber-300" />
                 )}
+                {generating ? 'Calculating & Generating Results...' : `Generate & Save Results (${selectedSubject})`}
               </button>
             </div>
           </form>
         )}
       </div>
 
-      {/* Display Generated Results Cards with AI Comments */}
+      {/* Generated Results Overview & Transcript Distribution */}
       {generatedResults && (
-        <div className="edu-card p-6 space-y-6 border-2 border-emerald-500/30">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md">
-                <Award className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Generated Results Overview</h3>
-                <p className="text-xs text-slate-500">
-                  {generatedResults.className} • {generatedResults.term} • {generatedResults.academicYear}
-                </p>
-              </div>
-            </div>
+        <div className="edu-card p-6 border-2 border-emerald-500 bg-emerald-50/20">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Award className="w-5 h-5 text-emerald-600" />
+              Calculated Semester Results — {generatedResults.subject} ({generatedResults.className})
+            </h3>
+            <span className="text-xs font-semibold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full border border-emerald-300">
+              {generatedResults.term} ({generatedResults.academicYear})
+            </span>
           </div>
 
           <div className="space-y-4">
             {generatedResults.students.map((st) => (
               <div
                 key={st.id}
-                className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-sm transition-shadow"
+                className="p-4 bg-white rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4"
               >
-                <div className="space-y-1 max-w-2xl">
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-slate-900">{st.full_name}</span>
-                    <span className="text-xs text-slate-500">({st.student_id})</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${st.gradeColor}`}>
-                      {st.grade} ({st.finalScore}%)
-                    </span>
+                <div>
+                  <div className="font-bold text-slate-900 flex items-center gap-2">
+                    {st.full_name}
+                    <span className="text-xs text-slate-400 font-mono font-normal">({st.student_id})</span>
                   </div>
-
-                  <p className="text-xs text-slate-600 italic bg-white p-2.5 rounded-lg border border-slate-200 mt-1">
-                    "{st.ai_comment || 'Good progress made during this academic semester.'}"
+                  <p className="text-xs text-slate-600 mt-1 italic max-w-2xl bg-slate-50 p-2 rounded-lg border border-slate-100">
+                    "{st.ai_comment}"
                   </p>
-
-                  <div className="flex items-center gap-4 text-[11px] text-slate-500 pt-1">
-                    <span>Exams (50%): <strong>{st.examWeighted}%</strong></span>
-                    <span>•</span>
-                    <span>Continuous Assessment (50%): <strong>{st.caWeighted}%</strong></span>
-                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-xs text-slate-400 block font-semibold">Final Score</span>
+                    <span className="text-lg font-extrabold text-slate-900">{st.finalScore}%</span>
+                  </div>
+
+                  <span
+                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-extrabold border ${st.gradeColor}`}
+                  >
+                    {st.grade}
+                  </span>
+
                   <button
                     onClick={() => handleDownloadPDF(st.reportId)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors shadow-xs"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors"
                   >
-                    <Download className="w-3.5 h-3.5 text-slate-500" />
-                    Download PDF Report
+                    <Download className="w-3.5 h-3.5" />
+                    PDF
                   </button>
                 </div>
               </div>
