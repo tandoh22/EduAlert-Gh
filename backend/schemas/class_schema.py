@@ -17,6 +17,7 @@ class ClassUpdate(BaseModel):
 class ClassResponse(BaseModel):
     id: int
     name: str
+    code: Optional[str] = None
     level: str
     course: Optional[str] = None
     year: int

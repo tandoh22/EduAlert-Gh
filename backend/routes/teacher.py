@@ -84,11 +84,25 @@ def teacher_dashboard(
     assignments_count = db.query(Assignment).filter(Assignment.teacher_id == current_user.id).count()
     quizzes_count = db.query(Quiz).filter(Quiz.teacher_id == current_user.id).count()
 
+    assigned_subs_lower = [s.lower() for s in assigned_subjects]
     risk_counts = {"High": 0, "Medium": 0, "Low": 0}
     student_list = []
     for student in students:
-        scores = db.query(Score).filter(Score.student_id == student.id).all()
-        avg = round(sum(s.score for s in scores) / len(scores)) if scores else 0
+        all_scores = db.query(Score).filter(Score.student_id == student.id).all()
+        subject_scores = [s.score for s in all_scores if s.subject and s.subject.lower() in assigned_subs_lower] if assigned_subs_lower else [s.score for s in all_scores]
+        
+        if subject_scores:
+            avg = round(sum(subject_scores) / len(subject_scores))
+            if avg < 50:
+                risk = "High"
+            elif avg < 65:
+                risk = "Medium"
+            else:
+                risk = "Low"
+        else:
+            avg = round(sum(s.score for s in all_scores) / len(all_scores)) if all_scores else 75
+            risk = "Low" if avg >= 65 else ("Medium" if avg >= 50 else "High")
+
         attendances = (
             db.query(Attendance).filter(Attendance.student_id == student.id).all()
         )
@@ -99,25 +113,22 @@ def teacher_dashboard(
                 * 100
             )
             if attendances
-            else 0
+            else 100
         )
-        pred = (
-            db.query(Prediction)
-            .filter(Prediction.student_id == student.id)
-            .order_by(Prediction.generated_at.desc())
-            .first()
-        )
-        risk = pred.risk_level if pred else ("Low" if avg >= 70 else "Medium")
+        if attn < 70 and risk == "Low":
+            risk = "Medium"
+
         risk_counts[risk] = risk_counts.get(risk, 0) + 1
         student_list.append({
             "id": student.id,
             "full_name": student.full_name,
-            "student_id": student.student_id,
+            "student_id": student.student_id or f"ACH2025{student.id:03d}",
             "class_name": student.class_name,
             "gender": student.gender,
             "avg_score": avg,
             "attendance_rate": attn,
             "risk_level": risk,
+            "subject": ", ".join(assigned_subjects) if assigned_subjects else (current_user.subject or "Assigned Subject"),
         })
 
     suggestions = (
@@ -142,7 +153,7 @@ def teacher_dashboard(
             })
 
     classes_payload = [
-        {"id": c.id, "name": c.name, "course": c.course}
+        {"id": c.id, "name": c.name, "code": c.code, "course": c.course}
         for c in assigned_classes
     ]
 

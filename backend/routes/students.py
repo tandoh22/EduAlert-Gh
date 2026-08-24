@@ -130,12 +130,18 @@ def get_my_profile(
         .first()
     )
 
+    class_id = enrollment.class_id if enrollment else None
+    if not class_id and student.class_name and student.class_name != "Unassigned":
+        cls = db.query(Class).filter(Class.name == student.class_name).first()
+        if cls:
+            class_id = cls.id
+
     return {
         "id": student.id,
         "full_name": student.full_name,
-        "student_id": student.student_id,
+        "student_id": student.student_id or f"ACH2025{student.id:03d}",
         "class_name": student.class_name,
-        "class_id": enrollment.class_id if enrollment else None,
+        "class_id": class_id,
         "admitted_course": student.admitted_course,
         "school": student.school,
         "teacher_id": student.teacher_id,
@@ -148,13 +154,7 @@ def self_enroll(
     db: Session = Depends(get_db),
     student: Student = Depends(get_current_student),
 ):
-    """Student self-service: pick a class based on elective preference.
-
-    Restricted to classes whose course falls under the student's admitted
-    course (e.g. a "General Science" admit can only pick Science 1/2/3).
-    Re-calling this replaces any previous class choice — a student can
-    change their mind before the term properly starts.
-    """
+    """Student self-service: pick a class based on elective preference."""
     target_class = db.query(Class).filter(Class.id == data.class_id).first()
     if not target_class:
         raise HTTPException(status_code=404, detail="Class not found")
@@ -163,7 +163,7 @@ def self_enroll(
 
     if student.admitted_course:
         allowed_class_courses = BROAD_COURSE_TO_CLASS_COURSES.get(student.admitted_course, [])
-        if target_class.course not in allowed_class_courses:
+        if allowed_class_courses and target_class.course not in allowed_class_courses:
             raise HTTPException(
                 status_code=400,
                 detail=f"'{target_class.name}' isn't part of your admitted course ({student.admitted_course}).",
@@ -183,8 +183,23 @@ def self_enroll(
         ))
 
     student.class_name = target_class.name
+    if not student.student_id:
+        student.student_id = f"ACH2025{student.id:03d}"
+
+    # Auto-link class teacher if assigned
+    from models.teacher_assignment import TeacherAssignment
+    ta = db.query(TeacherAssignment).filter(TeacherAssignment.class_id == target_class.id).first()
+    if ta:
+        student.teacher_id = ta.teacher_id
+
     db.commit()
-    return {"message": "Enrolled successfully", "class_id": target_class.id, "class_name": target_class.name}
+    db.refresh(student)
+    return {
+        "message": "Enrolled successfully",
+        "class_id": target_class.id,
+        "class_name": target_class.name,
+        "student_id": student.student_id,
+    }
 
 
 @router.get("/overview")

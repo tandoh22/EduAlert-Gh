@@ -68,6 +68,11 @@ export const deleteQuiz = async (quizId) => {
   await api.delete(`/quizzes/${quizId}`);
 };
 
+export const deleteQuizQuestion = async (questionId) => {
+  const response = await api.delete(`/quizzes/questions/${questionId}`);
+  return response.data;
+};
+
 export const getTeacherQuizzes = async () => {
   const response = await api.get('/quizzes/teacher');
   return response.data;

@@ -32,7 +32,7 @@ def _build_user_response(user: User, db: Session) -> dict:
     if user.role == "student":
         student = db.query(Student).filter(Student.user_id == user.id).first()
         if student:
-            data["student_id"] = student.id
+            data["student_id"] = student.student_id or f"ACH2025{student.id:03d}"
             data["class_name"] = student.class_name
             data["admitted_course"] = student.admitted_course
             enrollment = (
@@ -42,6 +42,10 @@ def _build_user_response(user: User, db: Session) -> dict:
             )
             if enrollment:
                 data["class_id"] = enrollment.class_id
+            elif student.class_name and student.class_name != "Unassigned":
+                cls = db.query(Class).filter(Class.name == student.class_name).first()
+                if cls:
+                    data["class_id"] = cls.id
     return data
 
 
@@ -181,6 +185,11 @@ def approve_user(
                     term=TERM,
                     year=YEAR,
                 ))
+
+    if user.role == "student":
+        student = db.query(Student).filter(Student.user_id == user.id).first()
+        if student and not student.student_id:
+            student.student_id = f"ACH2025{student.id:03d}"
 
     user.status = "approved"
     db.commit()

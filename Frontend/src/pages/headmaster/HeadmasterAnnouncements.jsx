@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
 import { Megaphone, Send, Calendar, Tag, Plus, Edit, Trash2, Eye, Loader2 } from 'lucide-react';
 import { createAnnouncement, getAnnouncements, deleteAnnouncement } from '../../services/announcementService';
+import { fetchClasses } from '../../services/headmasterService';
 
 export default function HeadmasterAnnouncements() {
   const [title, setTitle] = useState('');
@@ -11,6 +12,7 @@ export default function HeadmasterAnnouncements() {
   const [priority, setPriority] = useState('normal');
   const [showForm, setShowForm] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [error, setError] = useState('');
@@ -18,7 +20,12 @@ export default function HeadmasterAnnouncements() {
 
   useEffect(() => {
     fetchAnnouncements();
+    fetchClasses()
+      .then((res) => setClasses(res.data))
+      .catch(() => {});
   }, []);
+
+  const classesMap = Object.fromEntries(classes.map((c) => [c.id, c]));
 
   const fetchAnnouncements = async () => {
     try {
@@ -210,7 +217,11 @@ export default function HeadmasterAnnouncements() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                        {announcement.is_schoolwide ? 'All' : `Class ${announcement.class_id}`}
+                        {announcement.is_schoolwide
+                          ? 'All Students'
+                          : classesMap[announcement.class_id]?.name
+                          ? `${classesMap[announcement.class_id].name}${classesMap[announcement.class_id].code ? ` (${classesMap[announcement.class_id].code})` : ''}`
+                          : `Class ${announcement.class_id}`}
                       </span>
                     </div>
 

@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
 import { Megaphone, Send, Calendar, Tag, Loader2, Trash2 } from 'lucide-react';
 import { createAnnouncement, getAnnouncements, deleteAnnouncement } from '../../services/announcementService';
+import { fetchMyClasses } from '../../services/teacherService';
 
 export default function PostNotice() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
-  const [classId, setClassId] = useState('1');
+  const [classId, setClassId] = useState('');
+  const [classes, setClasses] = useState([]);
   const [priority, setPriority] = useState('normal');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -18,6 +20,14 @@ export default function PostNotice() {
 
   useEffect(() => {
     fetchAnnouncementsList();
+    fetchMyClasses()
+      .then((res) => {
+        setClasses(res.data);
+        if (res.data.length > 0) {
+          setClassId(String(res.data[0].id));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchAnnouncementsList = async () => {
@@ -48,7 +58,7 @@ export default function PostNotice() {
     setSuccess(false);
 
     try {
-      const announcement = await createAnnouncement({
+      await createAnnouncement({
         title,
         body: content,
         is_schoolwide: targetAudience === 'all',
@@ -193,17 +203,14 @@ export default function PostNotice() {
               >
                 <option value="">Select audience</option>
                 <option value="all">All Students</option>
-                <option value="JHS-1">JHS 1</option>
-                <option value="JHS-2">JHS 2</option>
-                <option value="JHS-3">JHS 3</option>
-                <option value="parents">Parents Only</option>
+                <option value="class">Specific Class</option>
               </select>
             </div>
 
             {targetAudience !== 'all' && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Class ID
+                  Target Class
                 </label>
                 <select
                   value={classId}
@@ -211,11 +218,15 @@ export default function PostNotice() {
                   className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   required
                 >
-                  <option value="1">Class 1</option>
-                  <option value="2">Class 2</option>
-                  <option value="3">Class 3</option>
-                  <option value="4">Class 4</option>
-                  <option value="5">Class 5</option>
+                  {classes.length === 0 ? (
+                    <option value="">No classes available</option>
+                  ) : (
+                    classes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.code ? `(${c.code})` : ''}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
             )}

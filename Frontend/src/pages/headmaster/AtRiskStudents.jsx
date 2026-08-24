@@ -73,7 +73,7 @@ export default function AtRiskStudents() {
 
   return (
     <div>
-      <PageHeader title="At-Risk Students" subtitle="Monitor and support students who need intervention" />
+      <PageHeader title="Overall At-Risk Students" subtitle="School-wide class performance overview evaluating student risk across all subjects" />
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">

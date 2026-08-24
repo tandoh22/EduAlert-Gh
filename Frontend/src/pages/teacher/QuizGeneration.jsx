@@ -8,6 +8,9 @@ import {
   publishQuiz,
   deleteQuiz,
   getTeacherQuizzes,
+  getQuizQuestions,
+  deleteQuizQuestion,
+  addQuestionManually,
 } from '../../services/quizzesService';
 import { fetchMyClasses } from '../../services/teacherService';
 
@@ -24,6 +27,8 @@ export default function QuizGeneration() {
   const [questions, setQuestions] = useState([
     { id: 1, question: '', options: ['', '', '', ''], correctAnswer: 0 },
   ]);
+  const [generatedQuestions, setGeneratedQuestions] = useState([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingFile, setGeneratingFile] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -56,6 +61,19 @@ export default function QuizGeneration() {
     }
   };
 
+  const loadPreviewQuestions = async (targetQuizId) => {
+    if (!targetQuizId) return;
+    try {
+      setLoadingPreview(true);
+      const data = await getQuizQuestions(targetQuizId);
+      setGeneratedQuestions(data || []);
+    } catch (err) {
+      console.error('Failed to load quiz questions preview:', err);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
   const handleClassChange = (selectedId) => {
     setClassId(selectedId);
     const cls = assignedClasses.find((c) => c.id.toString() === selectedId.toString());
@@ -77,15 +95,36 @@ export default function QuizGeneration() {
     }
   };
 
+  const handleSelectQuiz = async (q) => {
+    setQuizId(q.id);
+    setTitle(q.title);
+    setSubject(q.subject);
+    setDuration(q.time_limit?.toString() || '15');
+    await loadPreviewQuestions(q.id);
+  };
+
   const handleDelete = async (quizIdToDelete) => {
     try {
       setDeleting(quizIdToDelete);
       await deleteQuiz(quizIdToDelete);
       setQuizzesList(quizzesList.filter((q) => q.id !== quizIdToDelete));
+      if (quizId === quizIdToDelete) {
+        setQuizId(null);
+        setGeneratedQuestions([]);
+      }
     } catch (err) {
       setError('Failed to delete quiz');
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId) => {
+    try {
+      await deleteQuizQuestion(questionId);
+      setGeneratedQuestions((prev) => prev.filter((q) => q.id !== questionId));
+    } catch (err) {
+      console.error('Failed to delete question:', err);
     }
   };
 
@@ -123,7 +162,9 @@ export default function QuizGeneration() {
 
     try {
       await generateQuizQuestions(quizId, numQuestions);
-      setSuccess(`${numQuestions} AI Quiz Questions generated successfully!`);
+      setSuccess(`${numQuestions} AI Quiz Questions generated successfully! Review questions and correct answers below before publishing.`);
+      await loadPreviewQuestions(quizId);
+      fetchQuizzesList();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate questions');
     } finally {
@@ -146,7 +187,9 @@ export default function QuizGeneration() {
 
     try {
       const res = await generateQuizQuestionsFromFile(quizId, quizFile, numQuestions);
-      setSuccess(res.message || `${numQuestions} MCQ questions generated from '${quizFile.name}'!`);
+      setSuccess(res.message || `${numQuestions} MCQ questions generated from '${quizFile.name}'! Review questions and correct answers below before publishing.`);
+      await loadPreviewQuestions(quizId);
+      fetchQuizzesList();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate MCQ quiz from uploaded file');
     } finally {
@@ -258,38 +301,69 @@ export default function QuizGeneration() {
       {/* Existing Quizzes List */}
       {quizzesList.length > 0 && (
         <div className="edu-card p-6 mb-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">Your Quizzes</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-900">Your Saved Quizzes</h3>
+            <span className="text-xs text-slate-500">Click any quiz to preview questions & publish</span>
+          </div>
           <div className="space-y-3">
-            {quizzesList.map((quiz) => (
-              <div
-                key={quiz.id}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-slate-400" />
-                  <div>
-                    <span className="text-sm font-medium text-slate-900">{quiz.title}</span>
-                    <span className="text-xs text-slate-500 ml-2 capitalize font-semibold bg-slate-200 px-2 py-0.5 rounded">
-                      {quiz.subject}
-                    </span>
-                    <span className="text-xs text-slate-400 ml-2">{quiz.time_limit} min</span>
-                    {quiz.is_published && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                        Published to Class
+            {quizzesList.map((quiz) => {
+              const isSelected = quizId === quiz.id;
+              return (
+                <div
+                  key={quiz.id}
+                  onClick={() => handleSelectQuiz(quiz)}
+                  className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-emerald-50/70 border-emerald-400 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Clock className={`w-5 h-5 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <div>
+                      <span className="text-sm font-semibold text-slate-900">{quiz.title}</span>
+                      <span className="text-xs text-slate-500 ml-2 capitalize font-semibold bg-slate-200 px-2 py-0.5 rounded">
+                        {quiz.subject}
                       </span>
-                    )}
+                      <span className="text-xs text-slate-400 ml-2">{quiz.time_limit} min</span>
+                      {quiz.is_published ? (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                          Published
+                        </span>
+                      ) : (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          Draft Preview
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectQuiz(quiz);
+                      }}
+                      className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg"
+                    >
+                      {isSelected ? 'Selected' : 'Preview'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(quiz.id);
+                      }}
+                      disabled={deleting === quiz.id}
+                      className="p-2 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-60"
+                      title="Delete quiz"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDelete(quiz.id)}
-                  disabled={deleting === quiz.id}
-                  className="p-2 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-60"
-                  title="Delete quiz"
-                >
-                  <Trash2 className="w-4 h-4 text-red-500" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -327,7 +401,7 @@ export default function QuizGeneration() {
                 {assignedClasses.length === 0 && <option value="">No classes assigned</option>}
                 {assignedClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    Class: {c.name} ({c.course || 'SHS'})
+                    {c.name} {c.code ? `(${c.code})` : ''}
                   </option>
                 ))}
               </select>
@@ -499,25 +573,150 @@ export default function QuizGeneration() {
             )}
             Generate {numQuestions} Questions from Topic
           </button>
-
-          {quizId && (
-            <button
-              type="button"
-              onClick={handlePublish}
-              disabled={publishing}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl hover:bg-emerald-300 transition-all disabled:opacity-60"
-            >
-              {publishing && <Loader2 className="w-4 h-4 animate-spin" />}
-              Publish Quiz to Students
-            </button>
-          )}
         </div>
       </div>
 
-      {/* 3. Manual Questions Builder */}
+      {/* 3. Question Preview & Correct Option Verification Section */}
+      {quizId && (
+        <div className="edu-card p-6 mb-6 border-2 border-emerald-500/30">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                3. Generated Questions & Correct Option Preview
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Review all generated questions with their highlighted correct answer option before publishing to students.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => loadPreviewQuestions(quizId)}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 rounded-lg transition-colors"
+              >
+                Refresh Questions
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePublish}
+                disabled={publishing || generatedQuestions.length === 0}
+                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50"
+              >
+                {publishing && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+                Publish Quiz to Students ({generatedQuestions.length} Questions)
+              </button>
+            </div>
+          </div>
+
+          {loadingPreview ? (
+            <div className="py-12 text-center text-slate-500">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-2" />
+              <p className="text-sm font-medium">Loading generated questions preview...</p>
+            </div>
+          ) : generatedQuestions.length === 0 ? (
+            <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+              <p className="text-sm font-medium text-slate-600">No questions generated or added for this quiz yet.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Use the AI generation options above or the manual builder below to populate questions.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {generatedQuestions.map((q, idx) => {
+                const correctKey = (q.correct_answer || 'A').toString().trim().toUpperCase();
+
+                const optionsList = [
+                  { label: 'A', text: q.option_a },
+                  { label: 'B', text: q.option_b },
+                  { label: 'C', text: q.option_c },
+                  { label: 'D', text: q.option_d },
+                ].filter((opt) => opt.text != null && opt.text !== '');
+
+                return (
+                  <div
+                    key={q.id || idx}
+                    className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                          Q{q.order_num || idx + 1}
+                        </span>
+                        <h3 className="font-semibold text-slate-900 text-sm">
+                          {q.question_text}
+                        </h3>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold rounded-lg">
+                          {q.marks || 1} {q.marks === 1 ? 'Mark' : 'Marks'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteQuestion(q.id)}
+                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                          title="Delete question"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Options List with Correct Answer Highlight */}
+                    {optionsList.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2">
+                        {optionsList.map((opt) => {
+                          const isCorrect = opt.label === correctKey || q.correct_answer === opt.text;
+                          return (
+                            <div
+                              key={opt.label}
+                              className={`p-3 rounded-lg border text-xs font-medium flex items-center justify-between ${
+                                isCorrect
+                                  ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold ring-1 ring-emerald-400'
+                                  : 'bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+                                    isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </span>
+                                <span>{opt.text}</span>
+                              </div>
+
+                              {isCorrect && (
+                                <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-extrabold rounded-md flex items-center gap-1 shrink-0">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Correct Option
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-xs text-emerald-900 font-medium">
+                        <span className="font-bold">Expected Correct Answer:</span> {q.correct_answer}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 4. Manual Questions Builder */}
       <div className="edu-card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-slate-900">3. Manual Question Builder</h2>
+          <h2 className="text-lg font-semibold text-slate-900">4. Manual Question Builder</h2>
           <button
             type="button"
             onClick={addQuestion}

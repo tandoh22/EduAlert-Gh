@@ -219,7 +219,7 @@ export default function TeacherDashboard() {
         <div>
           <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-500" />
-            Class Risk Breakdown
+            Subject Risk Breakdown ({data?.subject || 'Assigned Subject'})
           </h2>
           <div className="edu-card p-5 space-y-4">
             <div className="flex items-center justify-between text-sm py-1 border-b border-slate-100">
@@ -284,13 +284,13 @@ export default function TeacherDashboard() {
                       Class
                     </th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      Avg Score
+                      Subject Avg Score
                     </th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       Attendance Rate
                     </th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      Risk Level
+                      Subject Risk Level
                     </th>
                   </tr>
                 </thead>

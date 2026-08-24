@@ -226,7 +226,7 @@ export default function AssignmentUpload() {
                 )}
                 {assignedClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    Class: {c.name} ({c.course || 'SHS'})
+                    {c.name} {c.code ? `(${c.code})` : ''}
                   </option>
                 ))}
               </select>

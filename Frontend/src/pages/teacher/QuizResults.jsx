@@ -53,9 +53,14 @@ export default function QuizResults() {
     }
   };
 
-  const filteredResults = quizResults.filter(
-    (result) => true // Add filtering logic if needed
-  );
+  const filteredResults = quizResults.filter((result) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (result.student_name && result.student_name.toLowerCase().includes(term)) ||
+      (result.student_id && result.student_id.toLowerCase().includes(term))
+    );
+  });
 
   const averageScore = filteredResults.length > 0
     ? Math.round(filteredResults.reduce((acc, r) => acc + (r.percentage || 0), 0) / filteredResults.length)
@@ -88,7 +93,7 @@ export default function QuizResults() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by student name..."
+                placeholder="Search by student name or roster ID..."
                 className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </div>
@@ -163,7 +168,8 @@ export default function QuizResults() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-200">
+                  <tr className="border-b border-slate-200 bg-slate-50/50">
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Student Name</th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Student ID</th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Score</th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Percentage</th>
@@ -174,7 +180,10 @@ export default function QuizResults() {
                   {filteredResults.map((result, index) => (
                     <tr key={index} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-medium text-slate-900">{result.student_id}</div>
+                        <div className="font-semibold text-slate-900">{result.student_name || 'Student'}</div>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-sm text-slate-600 font-medium">
+                        {result.student_id}
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-600">{result.score} / {result.total_marks}</div>

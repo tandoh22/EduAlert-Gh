@@ -18,6 +18,76 @@ from models.user import User
 
 router = APIRouter()
 
+def extract_text_from_file(file_bytes: bytes, filename: str, content_type: str) -> str:
+    filename_lower = (filename or "").lower()
+    content_type_lower = (content_type or "").lower()
+    extracted_text = ""
+
+    # 1. Try PDF extraction using pypdf, PyPDF2, or stream text extraction
+    if filename_lower.endswith(".pdf") or "pdf" in content_type_lower:
+        try:
+            import io
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
+            extracted_text = "\n".join(pages_text)
+        except Exception:
+            pass
+
+        if not extracted_text:
+            try:
+                import io
+                import PyPDF2
+                reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
+                pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
+                extracted_text = "\n".join(pages_text)
+            except Exception:
+                pass
+
+        if not extracted_text:
+            try:
+                import re
+                raw = file_bytes.decode("latin1", errors="ignore")
+                matches = re.findall(r'\((.*?)\)\s*Tj', raw)
+                if matches:
+                    extracted_text = " ".join(matches)
+            except Exception:
+                pass
+
+    # 2. Try DOCX extraction using python-docx or zipfile XML parsing
+    elif filename_lower.endswith(".docx") or "officedocument" in content_type_lower or "word" in content_type_lower:
+        try:
+            import io
+            import docx
+            doc = docx.Document(io.BytesIO(file_bytes))
+            extracted_text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+        except Exception:
+            pass
+
+        if not extracted_text:
+            try:
+                import io, zipfile
+                from xml.etree import ElementTree as ET
+                with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+                    xml_content = z.read("word/document.xml")
+                    tree = ET.fromstring(xml_content)
+                    texts = [node.text for node in tree.iter() if node.tag.endswith('}t') and node.text]
+                    extracted_text = "\n".join(texts)
+            except Exception:
+                pass
+
+    # 3. Fallback for TXT, CSV, MD, JSON, or unknown
+    if not extracted_text:
+        try:
+            extracted_text = file_bytes.decode("utf-8")
+        except Exception:
+            try:
+                extracted_text = file_bytes.decode("latin-1", errors="ignore")
+            except Exception:
+                extracted_text = ""
+
+    return extracted_text.strip()
+
 def _generate_fallback_quiz_questions(subject: str, topic: str, count: int) -> List[dict]:
     base_questions = [
         {
@@ -274,49 +344,44 @@ async def generate_quiz_questions_from_file(
         raise HTTPException(status_code=404, detail="Quiz not found")
 
     file_bytes = await file.read()
-    file_text = ""
-    try:
-        file_text = file_bytes.decode("utf-8", errors="ignore")
-    except Exception:
-        file_text = ""
+    extracted_text = extract_text_from_file(file_bytes, file.filename or "", file.content_type or "")
 
     questions_data = None
-    if settings.ANTHROPIC_API_KEY:
+    if settings.ANTHROPIC_API_KEY and len(extracted_text) > 20:
         try:
-            messages_content = []
-            if file.content_type == "application/pdf":
-                pdf_base64 = base64.b64encode(file_bytes).decode("utf-8")
-                messages_content.append({
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": pdf_base64
-                    }
-                })
-            elif file_text:
-                messages_content.append({"type": "text", "text": f"Uploaded Document Content:\n{file_text[:5000]}"})
-
             prompt = f"""
-Generate {num_questions} Multiple Choice Questions (MCQs) for a quiz based on the attached document content.
+You are an expert Ghanaian Senior High School (SHS) teacher.
+Generate {num_questions} Multiple Choice Questions (MCQs) for a quiz based strictly on the document text provided below.
+
+DOCUMENT CONTENT:
+---
+{extracted_text[:12000]}
+---
+
+QUIZ DETAILS:
 Subject: {quiz.subject}
 Topic: {quiz.topic or quiz.title}
 
-Respond ONLY with a valid JSON array of objects with schema:
+INSTRUCTIONS:
+1. Generate exactly {num_questions} high-quality MCQs based directly on facts, definitions, and concepts in the document text above.
+2. For each question, provide 4 distinct options (option_a, option_b, option_c, option_d).
+3. Specify the correct answer letter ("A", "B", "C", or "D") in correct_answer.
+4. Respond ONLY with a valid, clean JSON array of objects. Do not include markdown code block formatting (no ```json).
+
+JSON SCHEMA:
 [
   {{
-    "question_text": "...",
+    "question_text": "Question prompt based on document content?",
     "question_type": "mcq",
-    "option_a": "...",
-    "option_b": "...",
-    "option_c": "...",
-    "option_d": "...",
+    "option_a": "Option A choice",
+    "option_b": "Option B choice",
+    "option_c": "Option C choice",
+    "option_d": "Option D choice",
     "correct_answer": "A",
     "marks": 1
   }}
 ]
 """
-            messages_content.append({"type": "text", "text": prompt})
             response = httpx.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -326,15 +391,18 @@ Respond ONLY with a valid JSON array of objects with schema:
                 },
                 json={
                     "model": "claude-3-5-sonnet-20241022",
-                    "max_tokens": 2000,
-                    "messages": [{"role": "user", "content": messages_content}]
+                    "max_tokens": 3000,
+                    "messages": [{"role": "user", "content": prompt}]
                 },
-                timeout=30.0
+                timeout=45.0
             )
             data = response.json()
             if "content" in data and len(data["content"]) > 0:
                 text = data["content"][0]["text"].strip()
-                text = text.replace("```json", "").replace("```", "").strip()
+                if "```json" in text:
+                    text = text.split("```json")[1].split("```")[0].strip()
+                elif "```" in text:
+                    text = text.split("```")[1].split("```")[0].strip()
                 questions_data = json.loads(text)
         except Exception as e:
             print("AI file quiz generation error:", e)
@@ -342,7 +410,7 @@ Respond ONLY with a valid JSON array of objects with schema:
     if not questions_data:
         topic_title = quiz.topic or quiz.title
         if file.filename:
-            topic_title = f"{topic_title} (Extracted from {file.filename})"
+            topic_title = f"{topic_title} (Based on {file.filename})"
         questions_data = _generate_fallback_quiz_questions(quiz.subject, topic_title, num_questions)
 
     saved_count = 0
@@ -355,7 +423,7 @@ Respond ONLY with a valid JSON array of objects with schema:
             option_b=q.get("option_b"),
             option_c=q.get("option_c"),
             option_d=q.get("option_d"),
-            correct_answer=q["correct_answer"],
+            correct_answer=str(q.get("correct_answer", "A")).upper(),
             marks=q.get("marks", 1),
             order_num=i
         )
@@ -368,6 +436,27 @@ Respond ONLY with a valid JSON array of objects with schema:
         "quiz_id": quiz_id,
         "questions_count": saved_count
     }
+
+@router.delete("/questions/{question_id}")
+def delete_question(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    question = db.query(QuizQuestion).filter(QuizQuestion.id == question_id).first()
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    quiz = db.query(Quiz).filter(
+        Quiz.id == question.quiz_id,
+        Quiz.teacher_id == current_user.id
+    ).first()
+    if not quiz and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete this question")
+
+    db.delete(question)
+    db.commit()
+    return {"message": "Question deleted successfully"}
 
 @router.post("/{quiz_id}/questions", response_model=QuizQuestionResponse, status_code=201)
 def add_question_manually(
@@ -600,14 +689,24 @@ def get_quiz_results(
         QuizAttempt.quiz_id == quiz_id,
         QuizAttempt.is_completed == True
     ).all()
-    return [
-        {
-            "student_id": a.student_id,
-            "student_name": a.student.full_name if a.student else "Student",
+
+    results = []
+    for a in attempts:
+        roster_id = "N/A"
+        student_name = "Student"
+        if a.student:
+            student_name = a.student.full_name or "Student"
+            roster_id = a.student.student_id or f"ACH2025{a.student_id:03d}"
+        else:
+            roster_id = f"ACH2025{a.student_id:03d}"
+
+        results.append({
+            "student_db_id": a.student_id,
+            "student_id": roster_id,
+            "student_name": student_name,
             "score": a.score,
             "total_marks": a.total_marks,
             "percentage": a.percentage,
             "submitted_at": a.submitted_at
-        }
-        for a in attempts
-    ]
+        })
+    return results

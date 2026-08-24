@@ -21,9 +21,32 @@ export default function Quizzes() {
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [timerInterval, setTimerInterval] = useState(null);
 
+  const fetchQuizzes = async () => {
+    if (!classId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError('');
+      console.log('Fetching quizzes for class_id:', classId);
+      const data = await getClassQuizzes(classId);
+      setQuizzes(data);
+    } catch (err) {
+      console.error('Error fetching quizzes:', err);
+      setError(err.response?.data?.detail || 'Failed to load quizzes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchQuizzes();
-  }, []);
+    if (classId) {
+      fetchQuizzes();
+    } else {
+      setLoading(false);
+    }
+  }, [classId]);
 
   useEffect(() => {
     // Start timer when quiz begins
@@ -46,7 +69,6 @@ export default function Quizzes() {
       setTimerInterval(interval);
     }
     
-    // Cleanup timer when leaving quiz view
     return () => {
       if (timerInterval) {
         clearInterval(timerInterval);
@@ -54,41 +76,6 @@ export default function Quizzes() {
       }
     };
   }, [view, currentQuiz]);
-
-  // Cleanup on component unmount
-  useEffect(() => {
-    return () => {
-      if (timerInterval) {
-        clearInterval(timerInterval);
-      }
-    };
-  }, [timerInterval]);
-
-  const fetchQuizzes = async () => {
-    try {
-      setLoading(true);
-      console.log('Fetching quizzes for class_id:', classId);
-      if (!classId) {
-        setError('No class enrollment found');
-        setLoading(false);
-        return;
-      }
-      const data = await getClassQuizzes(classId);
-      console.log('Fetched quizzes:', data);
-      console.log('Number of quizzes:', data.length);
-      if (data.length > 0) {
-        console.log('First quiz:', data[0]);
-        console.log('Is published:', data[0].is_published);
-      }
-      setQuizzes(data);
-    } catch (err) {
-      console.error('Error fetching quizzes:', err);
-      console.error('Error response:', err.response);
-      setError(err.response?.data?.detail || 'Failed to load quizzes');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleStartQuiz = async (quiz) => {
     try {

@@ -4,6 +4,8 @@ import PageHeader from '../components/PageHeader';
 import LoadingState, { EmptyState, ErrorState } from '../components/LoadingState';
 import { fetchMyProfile, fetchClasses, selfEnrollClass } from '../services/portalService';
 
+import { useStudent } from '../context/StudentContext';
+
 const BROAD_COURSE_TO_CLASS_COURSES = {
   'General Science': ['Science 1', 'Science 2', 'Science 3'],
   'General Arts': ['Arts 1', 'Arts 2', 'Arts 3'],
@@ -13,6 +15,7 @@ const BROAD_COURSE_TO_CLASS_COURSES = {
 };
 
 export default function EnrollClass() {
+  const { refreshProfile } = useStudent() || {};
   const [profile, setProfile] = useState(null);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +45,11 @@ export default function EnrollClass() {
     setError(null);
     try {
       await selfEnrollClass(selectedClassId);
+      if (refreshProfile) {
+        await refreshProfile();
+      } else {
+        localStorage.removeItem('edualert_student_profile');
+      }
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not complete enrollment.');

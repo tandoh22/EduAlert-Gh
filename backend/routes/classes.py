@@ -46,6 +46,7 @@ def get_my_classes(
             {
                 "id": c.id,
                 "name": c.name,
+                "code": c.code,
                 "level": c.level,
                 "course": c.course,
                 "year": c.year,
@@ -68,6 +69,7 @@ def get_my_classes(
             classes_map[c.id] = {
                 "id": c.id,
                 "name": c.name,
+                "code": c.code,
                 "level": c.level,
                 "course": c.course,
                 "year": c.year,
