@@ -113,7 +113,12 @@ export default function EnrollClass() {
                   isSelected ? 'ring-2 ring-emerald-500' : 'hover:shadow-lg'
                 }`}
               >
-                <h3 className="font-semibold text-slate-900 mb-1">{c.name}</h3>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h3 className="font-semibold text-slate-900">{c.name}</h3>
+                  <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-md">
+                    Class ID: {c.code || c.name}
+                  </span>
+                </div>
                 <p className="text-xs text-slate-500 mb-3">{c.course}</p>
                 <p className="text-xs text-slate-600">{c.subjects.join(', ')}</p>
               </button>

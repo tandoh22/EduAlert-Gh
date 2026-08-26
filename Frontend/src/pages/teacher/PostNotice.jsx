@@ -223,7 +223,7 @@ export default function PostNotice() {
                   ) : (
                     classes.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} {c.code ? `(${c.code})` : ''}
+                        {c.code ? `[${c.code}] ${c.name}` : c.name}
                       </option>
                     ))
                   )}

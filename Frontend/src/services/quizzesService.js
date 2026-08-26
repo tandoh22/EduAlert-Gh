@@ -27,6 +27,11 @@ export const addQuestionManually = async (quizId, data) => {
   return response.data;
 };
 
+export const addQuestionsBatch = async (quizId, questions) => {
+  const response = await api.post(`/quizzes/${quizId}/questions/batch`, questions);
+  return response.data;
+};
+
 export const getQuizQuestions = async (quizId) => {
   const response = await api.get(`/quizzes/${quizId}/questions`);
   return response.data;

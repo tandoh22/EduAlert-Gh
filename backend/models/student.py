@@ -21,3 +21,9 @@ class Student(Base):
     scores          = relationship("Score", back_populates="student", cascade="all, delete")
     attendances     = relationship("Attendance", back_populates="student", cascade="all, delete")
     predictions     = relationship("Prediction", back_populates="student", cascade="all, delete")
+    
+    @property
+    def class_code(self):
+        from models.class_model import generate_class_code
+        return generate_class_code(self.class_name)
+

@@ -32,11 +32,14 @@ class SubmissionResponse(BaseModel):
     id: int
     assignment_id: int
     student_id: int
-    answer_text: Optional[str]
-    file_url: Optional[str]
-    ai_feedback: Optional[str]
-    ai_score: Optional[int]
-    teacher_score: Optional[int]
-    submitted_at: datetime
+    student_name: Optional[str] = None
+    student_code: Optional[str] = None
+    class_name: Optional[str] = None
+    answer_text: Optional[str] = None
+    file_url: Optional[str] = None
+    ai_feedback: Optional[str] = None
+    ai_score: Optional[int] = None
+    teacher_score: Optional[int] = None
+    submitted_at: Optional[datetime] = None
     class Config:
         from_attributes = True

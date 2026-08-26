@@ -28,7 +28,7 @@ def _can_access_student(db: Session, current_user: User, student_id: int) -> boo
     """Admins can access any student. A student can access only their own
     record. A teacher can access a student only if TeacherAssignment
     actually ties them to a class that student is enrolled in."""
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "headmaster"):
         return True
     if current_user.role == "student":
         linked = db.query(Student).filter(Student.user_id == current_user.id).first()
@@ -59,7 +59,7 @@ def list_students(
     Admins see every student; teachers only see students enrolled in a
     class that a TeacherAssignment row ties them to.
     """
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "headmaster"):
         query = db.query(Student)
     else:
         assigned_classes = (
@@ -131,10 +131,20 @@ def get_my_profile(
     )
 
     class_id = enrollment.class_id if enrollment else None
+    class_code = None
     if not class_id and student.class_name and student.class_name != "Unassigned":
         cls = db.query(Class).filter(Class.name == student.class_name).first()
         if cls:
             class_id = cls.id
+            class_code = cls.code
+    elif class_id:
+        cls = db.query(Class).filter(Class.id == class_id).first()
+        if cls:
+            class_code = cls.code
+    
+    if not class_code and student.class_name:
+        from models.class_model import generate_class_code
+        class_code = generate_class_code(student.class_name)
 
     return {
         "id": student.id,
@@ -142,6 +152,7 @@ def get_my_profile(
         "student_id": student.student_id or f"ACH2025{student.id:03d}",
         "class_name": student.class_name,
         "class_id": class_id,
+        "class_code": class_code,
         "admitted_course": student.admitted_course,
         "school": student.school,
         "teacher_id": student.teacher_id,
@@ -197,6 +208,7 @@ def self_enroll(
     return {
         "message": "Enrolled successfully",
         "class_id": target_class.id,
+        "class_code": target_class.code,
         "class_name": target_class.name,
         "student_id": student.student_id,
     }
@@ -297,12 +309,11 @@ def get_student(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher),
 ):
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id,
-    ).first()
+    student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    if not _can_access_student(db, current_user, student_id):
+        raise HTTPException(status_code=403, detail="Not authorized")
     return student
 
 
@@ -313,12 +324,11 @@ def update_student(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher),
 ):
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id,
-    ).first()
+    student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    if not _can_access_student(db, current_user, student_id):
+        raise HTTPException(status_code=403, detail="Not authorized")
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(student, key, value)
     db.commit()
@@ -332,12 +342,11 @@ def delete_student(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher),
 ):
-    student = db.query(Student).filter(
-        Student.id == student_id,
-        Student.teacher_id == current_user.id,
-    ).first()
+    student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    if not _can_access_student(db, current_user, student_id):
+        raise HTTPException(status_code=403, detail="Not authorized")
     db.delete(student)
     db.commit()
 

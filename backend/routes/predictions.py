@@ -45,7 +45,7 @@ def _teacher_assigned_subjects(db: Session, teacher: User) -> List[str]:
 def _can_access_student(db: Session, current_user: User, student_id: int) -> bool:
     """Admins can access any student. Teachers only students enrolled in
     a class a TeacherAssignment row actually ties them to."""
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "headmaster"):
         return True
     class_ids = _teacher_class_ids(db, current_user.id)
     if not class_ids:
@@ -206,7 +206,7 @@ def run_prediction(student_id: int, db: Session = Depends(get_db), current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     all_scores = db.query(Score).filter(Score.student_id == student_id).all()
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "headmaster"):
         assigned_subjects = _teacher_assigned_subjects(db, current_user)
         assigned_subs_lower = [s.lower() for s in assigned_subjects]
         scores = [s for s in all_scores if s.subject and s.subject.lower() in assigned_subs_lower] if assigned_subs_lower else all_scores
@@ -232,7 +232,7 @@ def run_prediction(student_id: int, db: Session = Depends(get_db), current_user:
 @router.post("/run-all", status_code=200)
 def run_predictions_for_all(db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):
     """Run predictions for every student the current teacher actually teaches, evaluated for teacher's subject(s)."""
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "headmaster"):
         students = db.query(Student).all()
         assigned_subs_lower = []
     else:
@@ -250,7 +250,7 @@ def run_predictions_for_all(db: Session = Depends(get_db), current_user: User = 
     results = []
     for student in students:
         all_scores = db.query(Score).filter(Score.student_id == student.id).all()
-        if current_user.role != "admin" and assigned_subs_lower:
+        if current_user.role not in ("admin", "headmaster") and assigned_subs_lower:
             scores = [s for s in all_scores if s.subject and s.subject.lower() in assigned_subs_lower]
         else:
             scores = all_scores

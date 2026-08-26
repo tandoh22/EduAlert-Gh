@@ -191,12 +191,21 @@ export default function ClassManagement() {
                 <div className="w-12 h-12 rounded-xl bg-[#0A192F] flex items-center justify-center">
                   <GraduationCap className="w-6 h-6 text-white" />
                 </div>
+                <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg tracking-wider">
+                  Class ID: {classItem.code || classItem.name}
+                </span>
               </div>
 
               <h3 className="text-lg font-semibold text-slate-900 mb-1">{classItem.name}</h3>
               <p className="text-sm text-slate-500 mb-4">{classItem.level}</p>
 
               <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Class ID</span>
+                  <span className="text-sm font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                    {classItem.code || classItem.name}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-500">Course</span>
                   <span className="text-sm font-semibold text-slate-900">{classItem.course || '—'}</span>

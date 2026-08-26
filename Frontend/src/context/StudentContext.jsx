@@ -57,6 +57,8 @@ export function StudentProvider({ children }) {
       loading, 
       error, 
       classId: profile?.class_id || profile?.student?.class_id, 
+      classCode: profile?.class_code || profile?.student?.class_code || profile?.code,
+      className: profile?.class_name || profile?.student?.class_name,
       studentId: profile?.id || profile?.student?.id,
       refreshProfile: fetchProfileData,
       updateProfile,

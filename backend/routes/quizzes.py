@@ -23,44 +23,73 @@ def extract_text_from_file(file_bytes: bytes, filename: str, content_type: str) 
     content_type_lower = (content_type or "").lower()
     extracted_text = ""
 
-    # 1. Try PDF extraction using pypdf, PyPDF2, or stream text extraction
+    # 1. Try PDF extraction
     if filename_lower.endswith(".pdf") or "pdf" in content_type_lower:
-        try:
-            import io
-            import pypdf
-            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-            pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
-            extracted_text = "\n".join(pages_text)
-        except Exception:
-            pass
-
-        if not extracted_text:
+        for mod_name in ("pypdf", "PyPDF2", "pdfplumber"):
             try:
                 import io
-                import PyPDF2
-                reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
-                pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
-                extracted_text = "\n".join(pages_text)
+                mod = __import__(mod_name)
+                if hasattr(mod, "PdfReader"):
+                    reader = mod.PdfReader(io.BytesIO(file_bytes))
+                    pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
+                    extracted_text = "\n".join(pages_text)
+                    if extracted_text.strip():
+                        break
+                elif hasattr(mod, "open"):
+                    with mod.open(io.BytesIO(file_bytes)) as pdf:
+                        pages_text = [page.extract_text() for page in pdf.pages if page.extract_text()]
+                        extracted_text = "\n".join(pages_text)
+                        if extracted_text.strip():
+                            break
             except Exception:
                 pass
 
+        # Pure Python PDF stream decompressor fallback for unencrypted PDFs
         if not extracted_text:
             try:
-                import re
-                raw = file_bytes.decode("latin1", errors="ignore")
-                matches = re.findall(r'\((.*?)\)\s*Tj', raw)
-                if matches:
-                    extracted_text = " ".join(matches)
+                import re, zlib
+                stream_pattern = re.compile(rb'stream[\r\n]+(.*?)[\r\n]+endstream', re.DOTALL)
+                texts = []
+                for match in stream_pattern.finditer(file_bytes):
+                    stream_data = match.group(1)
+                    try:
+                        decompressed = zlib.decompress(stream_data)
+                    except Exception:
+                        decompressed = stream_data
+
+                    tj_matches = re.findall(rb'\(((?:[^()\\]|\\.)*)\)\s*Tj', decompressed)
+                    for m in tj_matches:
+                        try:
+                            clean_str = m.decode("latin1", errors="ignore").replace(r'\(', '(').replace(r'\)', ')')
+                            if clean_str.strip():
+                                texts.append(clean_str)
+                        except Exception:
+                            pass
+
+                    array_matches = re.findall(rb'\[(.*?)\]\s*TJ', decompressed, re.DOTALL)
+                    for arr in array_matches:
+                        inner_texts = re.findall(rb'\(((?:[^()\\]|\\.)*)\)', arr)
+                        joined_arr = "".join([t.decode("latin1", errors="ignore") for t in inner_texts])
+                        if joined_arr.strip():
+                            texts.append(joined_arr)
+
+                if texts:
+                    extracted_text = " ".join(texts)
             except Exception:
                 pass
 
-    # 2. Try DOCX extraction using python-docx or zipfile XML parsing
+    # 2. Try DOCX extraction
     elif filename_lower.endswith(".docx") or "officedocument" in content_type_lower or "word" in content_type_lower:
         try:
-            import io
-            import docx
+            import io, docx
             doc = docx.Document(io.BytesIO(file_bytes))
-            extracted_text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join([cell.text.strip() for cell in row.cells if cell.text.strip()])
+                    if row_text:
+                        paragraphs.append(row_text)
+            extracted_text = "\n".join(paragraphs)
         except Exception:
             pass
 
@@ -71,12 +100,18 @@ def extract_text_from_file(file_bytes: bytes, filename: str, content_type: str) 
                 with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
                     xml_content = z.read("word/document.xml")
                     tree = ET.fromstring(xml_content)
-                    texts = [node.text for node in tree.iter() if node.tag.endswith('}t') and node.text]
-                    extracted_text = "\n".join(texts)
+                    paragraphs = []
+                    for p in tree.iter():
+                        if p.tag.endswith('}p'):
+                            text_runs = [t.text for t in p.iter() if t.tag.endswith('}t') and t.text]
+                            p_text = "".join(text_runs).strip()
+                            if p_text:
+                                paragraphs.append(p_text)
+                    extracted_text = "\n".join(paragraphs)
             except Exception:
                 pass
 
-    # 3. Fallback for TXT, CSV, MD, JSON, or unknown
+    # 3. Fallback for TXT, CSV, MD, JSON
     if not extracted_text:
         try:
             extracted_text = file_bytes.decode("utf-8")
@@ -88,118 +123,350 @@ def extract_text_from_file(file_bytes: bytes, filename: str, content_type: str) 
 
     return extracted_text.strip()
 
-def _generate_fallback_quiz_questions(subject: str, topic: str, count: int) -> List[dict]:
-    base_questions = [
+
+def _generate_file_based_fallback_questions(extracted_text: str, subject: str, topic: str, count: int) -> List[dict]:
+    """Extract real statements from uploaded document and construct high quality MCQs."""
+    import re
+    # Clean and split text into sentences
+    cleaned = re.sub(r'\s+', ' ', extracted_text)
+    raw_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned) if len(s.strip()) > 35 and len(s.strip()) < 220]
+    
+    questions = []
+    
+    for s in raw_sentences:
+        # Check for definition or factual pattern: "X is ...", "X refers to ...", "X contains ...", "X leads to ..."
+        m = re.match(r'^([A-Z][a-zA-Z0-9\s\-]{2,30})\s+(is\s+(?:defined\s+as\s+)?(?:a|an|the)?|refers\s+to|consists\s+of|describes|contains|functions\s+as|plays\s+a\s+key\s+role\s+in)\s+(.*)', s, re.IGNORECASE)
+        if m:
+            term = m.group(1).strip()
+            predicate = m.group(2).strip()
+            rest = m.group(3).strip().rstrip('.?!')
+            
+            if len(rest) > 15:
+                q_text = f"According to the document, which of the following best describes '{term}'?"
+                correct_opt = f"It {predicate} {rest[:90]}." if not rest.lower().startswith(('it', 'a', 'the', 'is')) else f"{rest[:90]}."
+                
+                questions.append({
+                    "question_text": q_text,
+                    "question_type": "mcq",
+                    "option_a": correct_opt,
+                    "option_b": f"It is unrelated to {subject} core concepts",
+                    "option_c": f"It causes an immediate decrease in {term.lower()} activity",
+                    "option_d": f"It is only observed under theoretical laboratory conditions",
+                    "correct_answer": "A",
+                    "marks": 1
+                })
+        else:
+            # Question from factual statement
+            words = s.split()
+            if len(words) >= 7:
+                q_text = f"Based on the text: \"{s[:120]}...\", which statement is TRUE?"
+                questions.append({
+                    "question_text": q_text,
+                    "question_type": "mcq",
+                    "option_a": f"The statement directly affirms that {s[:85].lower()}...",
+                    "option_b": f"The document explicitly refutes this observation in {subject}",
+                    "option_c": f"This phenomenon only occurs in non-standard systems",
+                    "option_d": "None of the above conclusions can be drawn",
+                    "correct_answer": "A",
+                    "marks": 1
+                })
+
+        if len(questions) >= count:
+            break
+
+    # If document sentences didn't fulfill the requested count, fill remaining with curriculum fallback
+    if len(questions) < count:
+        needed = count - len(questions)
+        curriculum_qs = _generate_fallback_quiz_questions(subject, topic, needed)
+        questions.extend(curriculum_qs)
+
+    return questions[:count]
+
+
+SUBJECT_QUESTION_BANKS = {
+    "biology": [
         {
-            "question_text": f"What is the primary definition of {topic} in {subject}?",
+            "question_text": "Which organelle is primarily responsible for ATP synthesis in eukaryotic cells?",
             "question_type": "mcq",
-            "option_a": f"The fundamental law governing {topic}",
-            "option_b": f"The study of energy transformation in {subject}",
-            "option_c": "The interaction between particles and fields",
-            "option_d": "A non-standard theoretical construct",
+            "option_a": "Mitochondrion",
+            "option_b": "Golgi apparatus",
+            "option_c": "Endoplasmic reticulum",
+            "option_d": "Ribosome",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"Which of the following factors directly influences {topic}?",
+            "question_text": "During photosynthesis, what is the source of oxygen released as a byproduct?",
             "question_type": "mcq",
-            "option_a": "Temperature and pressure",
-            "option_b": "Atmospheric color",
-            "option_c": "Gravitational constant changes",
-            "option_d": "Random background noise",
+            "option_a": "Photolysis of water molecules",
+            "option_b": "Carbon dioxide fixation",
+            "option_c": "Glucose breakdown",
+            "option_d": "NADPH oxidation",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"What is the standard unit of measurement relevant to {topic}?",
+            "question_text": "Which enzyme catalyzes the breakdown of starch into maltose in the human digestive system?",
             "question_type": "mcq",
-            "option_a": "Joules (J) or Pascals (Pa)",
-            "option_b": "Light years",
-            "option_c": "Decibels",
-            "option_d": "Degrees Fahrenheit",
+            "option_a": "Salivary amylase",
+            "option_b": "Pepsin",
+            "option_c": "Lipase",
+            "option_d": "Trypsin",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"Who formulated the foundational theories of {topic}?",
+            "question_text": "What type of blood vessel carries oxygenated blood from the lungs back to the left atrium of the heart?",
             "question_type": "mcq",
-            "option_a": "Leading Ghanaian and international scientists",
-            "option_b": "Ancient Greek poets",
-            "option_c": "19th century economists",
-            "option_d": "Anonymous medieval scribes",
+            "option_a": "Pulmonary vein",
+            "option_b": "Pulmonary artery",
+            "option_c": "Vena cava",
+            "option_d": "Aorta",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"In a closed system, how does {topic} conserve energy?",
+            "question_text": "In Mendelian genetics, what is the expected phenotypic ratio in a monohybrid cross of two heterozygous individuals (Aa x Aa)?",
             "question_type": "mcq",
-            "option_a": "Total energy remains constant throughout the process",
-            "option_b": "Energy is destroyed permanently",
-            "option_c": "Energy increases exponentially",
-            "option_d": "Mass converts into charge",
+            "option_a": "3 dominant : 1 recessive",
+            "option_b": "1 dominant : 1 recessive",
+            "option_c": "9:3:3:1",
+            "option_d": "1:2:1",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"True or False: {topic} plays a vital role in industrial applications across Ghana.",
+            "question_text": "Which blood component is primarily responsible for immune defense and antibody production?",
             "question_type": "mcq",
-            "option_a": "True",
-            "option_b": "False",
-            "option_c": "N/A",
-            "option_d": "N/A",
+            "option_a": "White blood cells (Leukocytes)",
+            "option_b": "Red blood cells (Erythrocytes)",
+            "option_c": "Platelets (Thrombocytes)",
+            "option_d": "Blood plasma proteins",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"True or False: Increasing temperature slows down reactions in {topic}.",
+            "question_text": "What is the function of xylem tissue in vascular plants?",
             "question_type": "mcq",
-            "option_a": "True",
-            "option_b": "False",
-            "option_c": "N/A",
-            "option_d": "N/A",
-            "correct_answer": "B",
-            "marks": 1
-        },
-        {
-            "question_text": f"True or False: {topic} is part of the NaCCA SHS core syllabus.",
-            "question_type": "mcq",
-            "option_a": "True",
-            "option_b": "False",
-            "option_c": "N/A",
-            "option_d": "N/A",
+            "option_a": "Transport of water and dissolved minerals from roots to leaves",
+            "option_b": "Transport of sucrose and amino acids from leaves to roots",
+            "option_c": "Storage of starch granules in the cortex",
+            "option_d": "Photosynthetic light absorption",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"Which step is key when analyzing a problem related to {topic}?",
+            "question_text": "Which hormone regulates glucose uptake by body cells to lower blood sugar levels?",
             "question_type": "mcq",
-            "option_a": "Identify variables and apply standard formulas",
-            "option_b": "Ignore given parameters",
-            "option_c": "Multiply values randomly",
-            "option_d": "Omit final units",
+            "option_a": "Insulin",
+            "option_b": "Glucagon",
+            "option_c": "Adrenaline",
+            "option_d": "Thyroxine",
             "correct_answer": "A",
             "marks": 1
         },
         {
-            "question_text": f"What is a real-world application of {topic} in Ghana?",
+            "question_text": "In an ecosystem, which trophic level converts radiant solar energy into chemical energy?",
             "question_type": "mcq",
-            "option_a": "Solar energy, agriculture, and water processing",
-            "option_b": "Deep space propulsion",
-            "option_c": "Sub-zero ice mining",
-            "option_d": "Cosmological simulation",
+            "option_a": "Primary producers (Autotrophs)",
+            "option_b": "Primary consumers (Herbivores)",
+            "option_c": "Secondary consumers (Carnivores)",
+            "option_d": "Decomposers (Saprotrophs)",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "Which nitrogenous base pairs with Adenine in DNA?",
+            "question_type": "mcq",
+            "option_a": "Thymine",
+            "option_b": "Cytosine",
+            "option_c": "Guanine",
+            "option_d": "Uracil",
+            "correct_answer": "A",
+            "marks": 1
+        }
+    ],
+    "chemistry": [
+        {
+            "question_text": "What is the oxidation state of sulfur in sulfuric acid (H2SO4)?",
+            "question_type": "mcq",
+            "option_a": "+6",
+            "option_b": "+4",
+            "option_c": "-2",
+            "option_d": "+2",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "According to Avogadro's law, what volume does one mole of any ideal gas occupy at standard temperature and pressure (STP)?",
+            "question_type": "mcq",
+            "option_a": "22.4 dm³ (liters)",
+            "option_b": "24.0 dm³ (liters)",
+            "option_c": "11.2 dm³ (liters)",
+            "option_d": "1.0 dm³ (liter)",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "Which bond type is formed by the electrostatic attraction between oppositely charged ions?",
+            "question_type": "mcq",
+            "option_a": "Ionic bond",
+            "option_b": "Covalent bond",
+            "option_c": "Metallic bond",
+            "option_d": "Hydrogen bond",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "What is the pH value of a neutral aqueous solution at 25°C?",
+            "question_type": "mcq",
+            "option_a": "7.0",
+            "option_b": "1.0",
+            "option_c": "14.0",
+            "option_d": "0.0",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "Which catalyst is traditionally used in the industrial Haber Process for ammonia synthesis?",
+            "question_type": "mcq",
+            "option_a": "Finely divided Iron (Fe)",
+            "option_b": "Vanadium(V) oxide (V2O5)",
+            "option_c": "Platinum (Pt)",
+            "option_d": "Nickel (Ni)",
+            "correct_answer": "A",
+            "marks": 1
+        }
+    ],
+    "physics": [
+        {
+            "question_text": "According to Newton's Second Law of Motion, what is the mathematical formula for force?",
+            "question_type": "mcq",
+            "option_a": "F = m * a",
+            "option_b": "F = m * v",
+            "option_c": "F = 0.5 * m * v²",
+            "option_d": "F = m * g * h",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "What is the SI unit of electrical resistance?",
+            "question_type": "mcq",
+            "option_a": "Ohm (Ω)",
+            "option_b": "Volt (V)",
+            "option_c": "Ampere (A)",
+            "option_d": "Watt (W)",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "Which phenomenon causes a light ray to bend when passing obliquely from air into water?",
+            "question_type": "mcq",
+            "option_a": "Refraction",
+            "option_b": "Diffraction",
+            "option_c": "Total internal reflection",
+            "option_d": "Polarization",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "What is the kinetic energy of an object of mass 'm' moving at velocity 'v'?",
+            "question_type": "mcq",
+            "option_a": "0.5 * m * v²",
+            "option_b": "m * v",
+            "option_c": "m * g * h",
+            "option_d": "0.5 * m * a",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "Which instrument is used to measure electric current in a closed circuit?",
+            "question_type": "mcq",
+            "option_a": "Ammeter connected in series",
+            "option_b": "Voltmeter connected in parallel",
+            "option_c": "Galvanometer connected across the battery only",
+            "option_d": "Rheostat",
+            "correct_answer": "A",
+            "marks": 1
+        }
+    ],
+    "mathematics": [
+        {
+            "question_text": "If 2x + 5 = 19, what is the value of x?",
+            "question_type": "mcq",
+            "option_a": "7",
+            "option_b": "12",
+            "option_c": "6",
+            "option_d": "14",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "What is the gradient (slope) of the line represented by the equation 3x - y + 6 = 0?",
+            "question_type": "mcq",
+            "option_a": "3",
+            "option_b": "-3",
+            "option_c": "6",
+            "option_d": "1/3",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "What is the value of sin(30°)?",
+            "question_type": "mcq",
+            "option_a": "0.5 (1/2)",
+            "option_b": "√3 / 2",
+            "option_c": "1.0",
+            "option_d": "√2 / 2",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "What are the roots of the quadratic equation x² - 5x + 6 = 0?",
+            "question_type": "mcq",
+            "option_a": "x = 2 and x = 3",
+            "option_b": "x = -2 and x = -3",
+            "option_c": "x = 1 and x = 6",
+            "option_d": "x = -1 and x = 6",
+            "correct_answer": "A",
+            "marks": 1
+        },
+        {
+            "question_text": "What is the median of the data set: [4, 7, 9, 12, 15, 18, 21]?",
+            "question_type": "mcq",
+            "option_a": "12",
+            "option_b": "14",
+            "option_c": "9",
+            "option_d": "15",
             "correct_answer": "A",
             "marks": 1
         }
     ]
+}
+
+
+def _generate_fallback_quiz_questions(subject: str, topic: str, count: int) -> List[dict]:
+    subject_key = (subject or "").lower().strip()
+    
+    bank = None
+    for key in SUBJECT_QUESTION_BANKS:
+        if key in subject_key or ("math" in subject_key and key == "mathematics"):
+            bank = SUBJECT_QUESTION_BANKS[key]
+            break
+            
+    if not bank:
+        # Integrated science / general science / general fallback
+        bank = SUBJECT_QUESTION_BANKS.get("biology", []) + SUBJECT_QUESTION_BANKS.get("chemistry", []) + SUBJECT_QUESTION_BANKS.get("physics", [])
 
     results = []
     for i in range(count):
-        tmpl = base_questions[i % len(base_questions)]
+        tmpl = bank[i % len(bank)]
         q_copy = dict(tmpl)
-        if i >= len(base_questions):
-            q_copy["question_text"] = f"{q_copy['question_text']} (Question {i+1})"
+        if topic and topic.lower() != subject_key and i % 3 == 0:
+            q_copy["question_text"] = f"In the study of {topic} ({subject}): {q_copy['question_text']}"
         results.append(q_copy)
     return results
+
 
 @router.post("/", response_model=QuizResponse, status_code=201)
 def create_quiz(
@@ -207,7 +474,7 @@ def create_quiz(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher)
 ):
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "headmaster"):
         from models.teacher_assignment import TeacherAssignment
         assignments = db.query(TeacherAssignment).filter(
             TeacherAssignment.teacher_id == current_user.id,
@@ -227,6 +494,7 @@ def create_quiz(
     db.refresh(quiz)
     return quiz
 
+
 @router.get("/teacher", response_model=List[QuizResponse])
 def get_teacher_quizzes(
     db: Session = Depends(get_db),
@@ -236,6 +504,7 @@ def get_teacher_quizzes(
     return db.query(Quiz).filter(
         Quiz.teacher_id == current_user.id
     ).order_by(Quiz.created_at.desc()).all()
+
 
 @router.delete("/{quiz_id}")
 def delete_quiz(
@@ -255,6 +524,7 @@ def delete_quiz(
     db.commit()
     return {"message": "Quiz deleted successfully"}
 
+
 @router.post("/generate-questions/{quiz_id}")
 def generate_quiz_questions(
     quiz_id: int,
@@ -273,11 +543,39 @@ def generate_quiz_questions(
     if settings.ANTHROPIC_API_KEY:
         try:
             prompt = f"""
-Generate {num_questions} quiz questions for:
+You are an expert Ghanaian Senior High School (SHS) teacher and assessment specialist.
+Generate exactly {num_questions} high-quality Multiple Choice Questions (MCQs) for:
 Subject: {quiz.subject}
 Topic: {quiz.topic or quiz.title}
 
-Respond ONLY with a JSON array of 5 MCQ, 3 true_false, and 2 short_answer questions.
+CURRICULUM INSTRUCTIONS:
+1. Ground the questions strictly in the Ghanaian NaCCA/WAEC SHS syllabus for {quiz.subject}.
+2. Generate exactly {num_questions} distinct 4-option MCQs.
+3. For each question, provide:
+   - "question_text": Clear, unambiguous question prompt
+   - "question_type": "mcq"
+   - "option_a": Option A text
+   - "option_b": Option B text
+   - "option_c": Option C text
+   - "option_d": Option D text
+   - "correct_answer": Exactly one letter ("A", "B", "C", or "D") that accurately matches the correct option.
+   - "marks": 1
+4. Make distractors plausible and educational.
+5. Respond ONLY with a valid JSON array of objects. Do not include markdown code block formatting (no ```json).
+
+JSON SCHEMA:
+[
+  {{
+    "question_text": "...",
+    "question_type": "mcq",
+    "option_a": "...",
+    "option_b": "...",
+    "option_c": "...",
+    "option_d": "...",
+    "correct_answer": "A",
+    "marks": 1
+  }}
+]
 """
             response = httpx.post(
                 "https://api.anthropic.com/v1/messages",
@@ -288,18 +586,23 @@ Respond ONLY with a JSON array of 5 MCQ, 3 true_false, and 2 short_answer questi
                 },
                 json={
                     "model": "claude-3-5-sonnet-20241022",
-                    "max_tokens": 2000,
+                    "max_tokens": 3500,
                     "messages": [{"role": "user", "content": prompt}]
                 },
-                timeout=25.0
+                timeout=35.0
             )
             data = response.json()
             if "content" in data and len(data["content"]) > 0:
                 text = data["content"][0]["text"].strip()
-                text = text.replace("```json", "").replace("```", "").strip()
-                questions_data = json.loads(text)
-        except Exception:
-            pass
+                if "```json" in text:
+                    text = text.split("```json")[1].split("```")[0].strip()
+                elif "```" in text:
+                    text = text.split("```")[1].split("```")[0].strip()
+                parsed = json.loads(text)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    questions_data = parsed[:num_questions]
+        except Exception as e:
+            print("AI topic quiz generation error:", e)
 
     if not questions_data:
         questions_data = _generate_fallback_quiz_questions(quiz.subject, quiz.topic or quiz.title, num_questions)
@@ -309,12 +612,12 @@ Respond ONLY with a JSON array of 5 MCQ, 3 true_false, and 2 short_answer questi
         question = QuizQuestion(
             quiz_id=quiz_id,
             question_text=q["question_text"],
-            question_type=q["question_type"],
-            option_a=q.get("option_a"),
-            option_b=q.get("option_b"),
-            option_c=q.get("option_c"),
-            option_d=q.get("option_d"),
-            correct_answer=q["correct_answer"],
+            question_type=q.get("question_type", "mcq"),
+            option_a=q.get("option_a") or "Option A",
+            option_b=q.get("option_b") or "Option B",
+            option_c=q.get("option_c") or "Option C",
+            option_d=q.get("option_d") or "Option D",
+            correct_answer=str(q.get("correct_answer", "A")).strip().upper(),
             marks=q.get("marks", 1),
             order_num=i
         )
@@ -327,6 +630,7 @@ Respond ONLY with a JSON array of 5 MCQ, 3 true_false, and 2 short_answer questi
         "quiz_id": quiz_id,
         "questions_count": saved_count
     }
+
 
 @router.post("/generate-questions-from-file/{quiz_id}")
 async def generate_quiz_questions_from_file(
@@ -344,44 +648,60 @@ async def generate_quiz_questions_from_file(
         raise HTTPException(status_code=404, detail="Quiz not found")
 
     file_bytes = await file.read()
-    extracted_text = extract_text_from_file(file_bytes, file.filename or "", file.content_type or "")
+    filename = file.filename or ""
+    content_type = file.content_type or ""
+    extracted_text = extract_text_from_file(file_bytes, filename, content_type)
 
     questions_data = None
-    if settings.ANTHROPIC_API_KEY and len(extracted_text) > 20:
+    if settings.ANTHROPIC_API_KEY:
         try:
+            messages_content = []
+            
+            # If PDF and bytes are reasonable size, attach document block for highest native OCR/parsing accuracy
+            if (filename.lower().endswith(".pdf") or "pdf" in content_type.lower()) and len(file_bytes) < 15 * 1024 * 1024:
+                pdf_b64 = base64.b64encode(file_bytes).decode("utf-8")
+                messages_content.append({
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": pdf_b64
+                    }
+                })
+
             prompt = f"""
-You are an expert Ghanaian Senior High School (SHS) teacher.
-Generate {num_questions} Multiple Choice Questions (MCQs) for a quiz based strictly on the document text provided below.
+You are an expert Ghanaian Senior High School (SHS) curriculum teacher and assessment creator.
+Generate exactly {num_questions} Multiple Choice Questions (MCQs) strictly and accurately based on the document provided.
 
-DOCUMENT CONTENT:
----
-{extracted_text[:12000]}
----
-
-QUIZ DETAILS:
+DOCUMENT SUMMARY & CONTEXT:
 Subject: {quiz.subject}
 Topic: {quiz.topic or quiz.title}
+File Name: {filename}
+{f"Document Excerpt:\n---\n{extracted_text[:14000]}\n---" if extracted_text else ""}
 
-INSTRUCTIONS:
-1. Generate exactly {num_questions} high-quality MCQs based directly on facts, definitions, and concepts in the document text above.
-2. For each question, provide 4 distinct options (option_a, option_b, option_c, option_d).
-3. Specify the correct answer letter ("A", "B", "C", or "D") in correct_answer.
-4. Respond ONLY with a valid, clean JSON array of objects. Do not include markdown code block formatting (no ```json).
+STRICT ACCURACY RULES:
+1. GROUNDING: Every question MUST test specific facts, definitions, processes, data, or principles directly mentioned in the document.
+2. FORMAT: Generate exactly {num_questions} MCQs with 4 distinct options: "option_a", "option_b", "option_c", "option_d".
+3. CORRECT ANSWER: Set "correct_answer" to the exact letter ("A", "B", "C", or "D") that contains the correct statement. Ensure the letter strictly corresponds to the true fact from the document.
+4. DISTRACTORS: Make the 3 incorrect options plausible misconceptions related to the subject matter.
+5. NO MARKDOWN: Respond ONLY with a clean JSON array of objects. Do not wrap with ```json.
 
 JSON SCHEMA:
 [
   {{
-    "question_text": "Question prompt based on document content?",
+    "question_text": "...",
     "question_type": "mcq",
-    "option_a": "Option A choice",
-    "option_b": "Option B choice",
-    "option_c": "Option C choice",
-    "option_d": "Option D choice",
+    "option_a": "...",
+    "option_b": "...",
+    "option_c": "...",
+    "option_d": "...",
     "correct_answer": "A",
     "marks": 1
   }}
 ]
 """
+            messages_content.append({"type": "text", "text": prompt})
+
             response = httpx.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -391,10 +711,10 @@ JSON SCHEMA:
                 },
                 json={
                     "model": "claude-3-5-sonnet-20241022",
-                    "max_tokens": 3000,
-                    "messages": [{"role": "user", "content": prompt}]
+                    "max_tokens": 4000,
+                    "messages": [{"role": "user", "content": messages_content}]
                 },
-                timeout=45.0
+                timeout=50.0
             )
             data = response.json()
             if "content" in data and len(data["content"]) > 0:
@@ -403,15 +723,20 @@ JSON SCHEMA:
                     text = text.split("```json")[1].split("```")[0].strip()
                 elif "```" in text:
                     text = text.split("```")[1].split("```")[0].strip()
-                questions_data = json.loads(text)
+                parsed = json.loads(text)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    questions_data = parsed[:num_questions]
         except Exception as e:
             print("AI file quiz generation error:", e)
 
     if not questions_data:
-        topic_title = quiz.topic or quiz.title
-        if file.filename:
-            topic_title = f"{topic_title} (Based on {file.filename})"
-        questions_data = _generate_fallback_quiz_questions(quiz.subject, topic_title, num_questions)
+        if len(extracted_text) > 30:
+            questions_data = _generate_file_based_fallback_questions(extracted_text, quiz.subject, quiz.topic or quiz.title, num_questions)
+        else:
+            topic_title = quiz.topic or quiz.title
+            if filename:
+                topic_title = f"{topic_title} ({filename})"
+            questions_data = _generate_fallback_quiz_questions(quiz.subject, topic_title, num_questions)
 
     saved_count = 0
     for i, q in enumerate(questions_data, 1):
@@ -419,11 +744,11 @@ JSON SCHEMA:
             quiz_id=quiz_id,
             question_text=q["question_text"],
             question_type=q.get("question_type", "mcq"),
-            option_a=q.get("option_a"),
-            option_b=q.get("option_b"),
-            option_c=q.get("option_c"),
-            option_d=q.get("option_d"),
-            correct_answer=str(q.get("correct_answer", "A")).upper(),
+            option_a=q.get("option_a") or "Option A",
+            option_b=q.get("option_b") or "Option B",
+            option_c=q.get("option_c") or "Option C",
+            option_d=q.get("option_d") or "Option D",
+            correct_answer=str(q.get("correct_answer", "A")).strip().upper(),
             marks=q.get("marks", 1),
             order_num=i
         )
@@ -432,10 +757,11 @@ JSON SCHEMA:
 
     db.commit()
     return {
-        "message": f"{saved_count} MCQ questions generated from '{file.filename}' and saved successfully!",
+        "message": f"{saved_count} MCQ questions generated from '{filename}' and saved successfully!",
         "quiz_id": quiz_id,
         "questions_count": saved_count
     }
+
 
 @router.delete("/questions/{question_id}")
 def delete_question(
@@ -451,12 +777,13 @@ def delete_question(
         Quiz.id == question.quiz_id,
         Quiz.teacher_id == current_user.id
     ).first()
-    if not quiz and current_user.role != "admin":
+    if not quiz and current_user.role not in ("admin", "headmaster"):
         raise HTTPException(status_code=403, detail="Not authorized to delete this question")
 
     db.delete(question)
     db.commit()
     return {"message": "Question deleted successfully"}
+
 
 @router.post("/{quiz_id}/questions", response_model=QuizQuestionResponse, status_code=201)
 def add_question_manually(
@@ -471,11 +798,51 @@ def add_question_manually(
     ).first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
-    question = QuizQuestion(**data.dict(), quiz_id=quiz_id)
+    
+    order_num = data.order_num
+    if not order_num or order_num <= 1:
+        count = db.query(QuizQuestion).filter(QuizQuestion.quiz_id == quiz_id).count()
+        order_num = count + 1
+
+    question_dict = data.dict()
+    question_dict["order_num"] = order_num
+    question = QuizQuestion(**question_dict, quiz_id=quiz_id)
     db.add(question)
     db.commit()
     db.refresh(question)
     return question
+
+
+@router.post("/{quiz_id}/questions/batch", response_model=List[QuizQuestionResponse], status_code=201)
+def add_questions_batch(
+    quiz_id: int,
+    questions: List[QuizQuestionCreate],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Save multiple manual questions to a quiz in one atomic request."""
+    quiz = db.query(Quiz).filter(
+        Quiz.id == quiz_id,
+        Quiz.teacher_id == current_user.id
+    ).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    existing_count = db.query(QuizQuestion).filter(QuizQuestion.quiz_id == quiz_id).count()
+
+    created_questions = []
+    for idx, q_data in enumerate(questions, start=existing_count + 1):
+        q_dict = q_data.dict()
+        q_dict["order_num"] = q_dict.get("order_num") or idx
+        question = QuizQuestion(**q_dict, quiz_id=quiz_id)
+        db.add(question)
+        created_questions.append(question)
+
+    db.commit()
+    for q in created_questions:
+        db.refresh(q)
+    return created_questions
+
 
 @router.get("/{quiz_id}/questions", response_model=List[QuizQuestionResponse])
 def get_quiz_questions(

@@ -18,16 +18,18 @@ class StudentUpdate(BaseModel):
 class StudentResponse(BaseModel):
     id: int
     full_name: str
-    student_id: str
+    student_id: Optional[str] = None
     class_name: str
-    gender: Optional[str]
-    teacher_id: int
-    user_id: Optional[int]
-    school: Optional[str]
-    created_at: datetime
+    class_code: Optional[str] = None
+    gender: Optional[str] = None
+    teacher_id: Optional[int] = None
+    user_id: Optional[int] = None
+    school: Optional[str] = None
+    created_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
 class StudentProfileResponse(BaseModel):
     student: StudentResponse
     class_id: Optional[int]
+    class_code: Optional[str] = None

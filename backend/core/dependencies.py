@@ -41,7 +41,7 @@ def get_current_student(
     return student
 
 def require_teacher(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in ["teacher", "admin"]:
+    if current_user.role not in ("teacher", "admin", "headmaster"):
         raise HTTPException(status_code=403, detail="Teachers only")
     return current_user
 
@@ -51,15 +51,6 @@ def require_student(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "headmaster"):
         raise HTTPException(status_code=403, detail="Headmaster/Admin access only")
     return current_user
-
-def get_current_student(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Student:
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
-    if not student:
-        raise HTTPException(status_code=403, detail="Student profile not found")
-    return student

@@ -40,7 +40,7 @@ def get_my_classes(
     """Get all classes and assigned subjects for the current teacher."""
     from models.teacher_assignment import TeacherAssignment
     
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "headmaster"):
         classes = db.query(Class).all()
         return [
             {

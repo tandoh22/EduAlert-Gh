@@ -33,3 +33,17 @@ class Submission(Base):
 
     assignment = relationship("Assignment", back_populates="submissions")
     student    = relationship("Student")
+
+    @property
+    def student_name(self):
+        return self.student.full_name if self.student else None
+
+    @property
+    def student_code(self):
+        if self.student:
+            return self.student.student_id or f"ACH2025{self.student_id:03d}"
+        return f"ACH2025{self.student_id:03d}"
+
+    @property
+    def class_name(self):
+        return self.student.class_name if self.student else None

@@ -14,7 +14,7 @@ from models.announcement import Announcement
 from models.class_model import Class
 from models.teacher_assignment import TeacherAssignment
 from schemas.report_card import ReportCardGenerate, ReportCardResponse, BulkResultsGenerate
-from core.dependencies import require_admin, require_teacher, get_current_user
+from core.dependencies import require_admin, require_teacher, get_current_user, get_current_student
 from core.config import settings
 from models.user import User
 
@@ -505,15 +505,131 @@ def approve_report_card(
     db.commit()
     return {"message": "Report card approved", "approved": "approved"}
 
-@router.get("/student/{student_id}", response_model=List[ReportCardResponse])
+@router.get("/my-transcripts")
+def get_my_transcripts(
+    db: Session = Depends(get_db),
+    student: Student = Depends(get_current_student)
+):
+    """
+    Returns only the approved & distributed transcripts for the currently authenticated student.
+    If the administration has not yet approved and distributed their class transcripts,
+    an empty list is returned.
+    """
+    reports = db.query(ReportCard).filter(
+        ReportCard.student_id == student.id,
+        ReportCard.approved.in_(["approved", "distributed"])
+    ).order_by(ReportCard.year.desc(), ReportCard.id.desc()).all()
+
+    results = []
+    for report in reports:
+        scores = db.query(Score).filter(
+            Score.student_id == student.id,
+            Score.year == report.year
+        ).all()
+
+        subject_breakdown = []
+        for sc in scores:
+            subject_breakdown.append({
+                "subject": sc.subject,
+                "score": round(sc.score, 1),
+                "grade": get_wassce_grade(sc.score),
+                "exam_type": sc.exam_type or "End of Semester"
+            })
+
+        final_score = report.final_score if report.final_score is not None else report.overall_average
+        grade = report.grade or (get_wassce_grade(final_score) if final_score is not None else "N/A")
+
+        results.append({
+            "id": report.id,
+            "student_id": report.student_id,
+            "term": report.term,
+            "year": report.year,
+            "overall_average": report.overall_average,
+            "attendance_rate": report.attendance_rate or 95.0,
+            "exam_score": report.exam_score,
+            "quiz_score": report.quiz_score,
+            "assignment_score": report.assignment_score,
+            "ca_score": report.ca_score,
+            "final_score": final_score,
+            "grade": grade,
+            "ai_comment": report.ai_comment,
+            "teacher_comment": report.teacher_comment,
+            "pdf_url": report.pdf_url,
+            "approved": report.approved,
+            "created_at": report.created_at,
+            "subjects": subject_breakdown,
+            "student_name": student.full_name,
+            "student_code": student.student_id or f"STD{student.id:03d}",
+            "class_name": student.class_name
+        })
+
+    return results
+
+@router.get("/student/{student_id}")
 def get_student_report_cards(
     student_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return db.query(ReportCard).filter(
-        ReportCard.student_id == student_id
-    ).all()
+    if current_user.role == "student":
+        student_rec = db.query(Student).filter(Student.user_id == current_user.id).first()
+        if not student_rec or student_rec.id != student_id:
+            raise HTTPException(status_code=403, detail="Access denied: You can only view your own transcripts")
+        reports = db.query(ReportCard).filter(
+            ReportCard.student_id == student_id,
+            ReportCard.approved.in_(["approved", "distributed"])
+        ).all()
+    else:
+        reports = db.query(ReportCard).filter(
+            ReportCard.student_id == student_id
+        ).all()
+
+    student = db.query(Student).filter(Student.id == student_id).first()
+    results = []
+    for report in reports:
+        scores = db.query(Score).filter(
+            Score.student_id == student_id,
+            Score.year == report.year
+        ).all() if student else []
+
+        subject_breakdown = [
+            {
+                "subject": sc.subject,
+                "score": round(sc.score, 1),
+                "grade": get_wassce_grade(sc.score),
+                "exam_type": sc.exam_type or "End of Semester"
+            }
+            for sc in scores
+        ]
+
+        final_score = report.final_score if report.final_score is not None else report.overall_average
+        grade = report.grade or (get_wassce_grade(final_score) if final_score is not None else "N/A")
+
+        results.append({
+            "id": report.id,
+            "student_id": report.student_id,
+            "term": report.term,
+            "year": report.year,
+            "overall_average": report.overall_average,
+            "attendance_rate": report.attendance_rate or 95.0,
+            "exam_score": report.exam_score,
+            "quiz_score": report.quiz_score,
+            "assignment_score": report.assignment_score,
+            "ca_score": report.ca_score,
+            "final_score": final_score,
+            "grade": grade,
+            "ai_comment": report.ai_comment,
+            "teacher_comment": report.teacher_comment,
+            "pdf_url": report.pdf_url,
+            "approved": report.approved,
+            "created_at": report.created_at,
+            "subjects": subject_breakdown,
+            "student_name": student.full_name if student else "Student",
+            "student_code": student.student_id if student else "",
+            "class_name": student.class_name if student else ""
+        })
+
+    return results
 
 @router.get("/summary/{class_id}")
 def get_class_summary(
@@ -535,22 +651,20 @@ def download_report_card_pdf(
     db: Session = Depends(get_db)
 ):
     report = db.query(ReportCard).filter(ReportCard.id == report_id).first()
-    student = db.query(Student).filter(Student.id == (report.student_id if report else report_id)).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Transcript not found")
 
-    raw_exam = (report.exam_score if report and report.exam_score is not None else 75.0)
-    exam_weighted = round(raw_exam * 0.50, 1)
+    student = db.query(Student).filter(Student.id == report.student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found for this transcript")
 
-    quiz_avg = (report.quiz_score if report and report.quiz_score is not None else 75.0)
-    assign_avg = (report.assignment_score if report and report.assignment_score is not None else 80.0)
-    ca_score = (report.ca_score if report and report.ca_score is not None else round((quiz_avg + assign_avg) / 2, 1))
-    ca_weighted = round(ca_score * 0.50, 1)
-
-    final_score = (report.final_score if report and report.final_score is not None else (report.overall_average if report else 77.5))
-    grade = (report.grade if report and report.grade else get_wassce_grade(final_score))
+    final_score = report.final_score if report.final_score is not None else (report.overall_average or 0.0)
+    grade = report.grade or get_wassce_grade(final_score)
 
     scores = db.query(Score).filter(
-        Score.student_id == student.id
-    ).all() if student else []
+        Score.student_id == student.id,
+        Score.year == report.year
+    ).all()
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -586,14 +700,14 @@ def download_report_card_pdf(
     story = []
     story.append(Paragraph("GHANA EDUCATION SERVICE", subheader_style))
     story.append(Paragraph("ACHIMOTA SENIOR HIGH SCHOOL", header_style))
-    story.append(Paragraph(f"OFFICIAL STUDENT ACADEMIC TRANSCRIPT — {(report.term if report else 'Semester 2').upper()} {(report.year if report else 2025)}", subheader_style))
+    story.append(Paragraph(f"OFFICIAL STUDENT ACADEMIC TRANSCRIPT — {(report.term or 'Semester 2').upper()} {report.year or 2025}", subheader_style))
     story.append(Spacer(1, 10))
 
     info_data = [
-        [Paragraph(f"<b>Student Name:</b> {student.full_name if student else 'Kwame Mensah'}", styles['Normal']),
-         Paragraph(f"<b>Student ID:</b> {student.student_id if student else 'ACH2025001'}", styles['Normal'])],
-        [Paragraph(f"<b>Class:</b> {student.class_name if student else 'Form 2 Science A'}", styles['Normal']),
-         Paragraph(f"<b>Attendance Rate:</b> {(report.attendance_rate if report else 92)}%", styles['Normal'])],
+        [Paragraph(f"<b>Student Name:</b> {student.full_name}", styles['Normal']),
+         Paragraph(f"<b>Student ID:</b> {student.student_id or f'STD{student.id:03d}'}", styles['Normal'])],
+        [Paragraph(f"<b>Class:</b> {student.class_name or 'Unassigned'}", styles['Normal']),
+         Paragraph(f"<b>Attendance Rate:</b> {int(report.attendance_rate or 95)}%", styles['Normal'])],
         [Paragraph(f"<b>Overall Cumulative Score:</b> {final_score}%", styles['Normal']),
          Paragraph(f"<b>Final WASSCE Grade:</b> <b>{grade}</b>", styles['Normal'])],
     ]
@@ -615,17 +729,13 @@ def download_report_card_pdf(
             status = "Pass" if s.score >= 40 else "Fail"
             score_table_data.append([s.subject, s.exam_type or "End of Semester", f"{round(s.score, 1)}%", w_grade, status])
     else:
-        default_subjects = [
-            ("Core Mathematics", "End of Semester", "85.0%", "A1", "Pass"),
-            ("English Language", "End of Semester", "78.0%", "B2", "Pass"),
-            ("Integrated Science", "End of Semester", "88.0%", "A1", "Pass"),
-            ("Social Studies", "End of Semester", "81.0%", "A1", "Pass"),
-            ("Biology", "End of Semester", "82.0%", "A1", "Pass"),
-            ("Chemistry", "End of Semester", "76.0%", "B2", "Pass"),
-            ("Physics", "End of Semester", "72.0%", "B3", "Pass"),
-        ]
-        for item in default_subjects:
-            score_table_data.append(list(item))
+        score_table_data.append([
+            student.course or "General Academic Course",
+            "End of Semester",
+            f"{final_score}%",
+            grade,
+            "Pass" if final_score >= 40 else "Pending"
+        ])
 
     score_table = Table(score_table_data, colWidths=[150, 110, 90, 80, 90])
     score_table.setStyle(TableStyle([
@@ -640,7 +750,7 @@ def download_report_card_pdf(
     story.append(Spacer(1, 15))
 
     story.append(Paragraph("ADMINISTRATION & TEACHER REMARKS", section_title))
-    comment_text = (report.teacher_comment if report and report.teacher_comment else "Official terminal transcript compiled and distributed by administration.")
+    comment_text = report.teacher_comment or report.ai_comment or "Official terminal transcript compiled and distributed by administration."
     comment_p = Paragraph(f"<i>\"{comment_text}\"</i>", styles['Normal'])
     comment_table = Table([[comment_p]], colWidths=[520])
     comment_table.setStyle(TableStyle([
@@ -652,7 +762,7 @@ def download_report_card_pdf(
 
     doc.build(story)
     buffer.seek(0)
-    return Response(content=buffer.getvalue(), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Transcript_{report_id}.pdf"})
+    return Response(content=buffer.getvalue(), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Transcript_{student.student_id or student.id}.pdf"})
 
 @router.delete("/{report_id}")
 def delete_report_card(

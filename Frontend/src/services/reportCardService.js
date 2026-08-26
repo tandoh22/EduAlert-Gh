@@ -38,6 +38,11 @@ export const getStudentReportCards = async (studentId) => {
   return response.data;
 };
 
+export const getMyTranscripts = async () => {
+  const response = await api.get('/report-cards/my-transcripts');
+  return response.data;
+};
+
 export const getAllReportCards = async (term, year) => {
   const response = await api.get('/report-cards', {
     params: { term, year }

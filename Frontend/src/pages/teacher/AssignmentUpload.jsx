@@ -226,7 +226,7 @@ export default function AssignmentUpload() {
                 )}
                 {assignedClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {c.code ? `(${c.code})` : ''}
+                    {c.code ? `[${c.code}] ${c.name}` : c.name}
                   </option>
                 ))}
               </select>

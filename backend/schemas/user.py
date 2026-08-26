@@ -14,6 +14,7 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    role: Optional[str] = None  # sent by frontend; not used by backend but must be accepted
 
 class UserResponse(BaseModel):
     id: int
@@ -23,7 +24,7 @@ class UserResponse(BaseModel):
     status: str
     subject: Optional[str] = None
     school: Optional[str] = None
-    student_id: Optional[int] = None
+    student_id: Optional[str] = None
     class_id: Optional[int] = None
     class_name: Optional[str] = None
     admitted_course: Optional[str] = None

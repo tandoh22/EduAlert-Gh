@@ -26,7 +26,7 @@ def create_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher)
 ):
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "headmaster"):
         from models.teacher_assignment import TeacherAssignment
         assignments = db.query(TeacherAssignment).filter(
             TeacherAssignment.teacher_id == current_user.id,

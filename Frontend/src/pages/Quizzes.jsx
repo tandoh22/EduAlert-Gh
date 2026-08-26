@@ -5,7 +5,7 @@ import { getClassQuizzes, startQuiz, submitQuiz, getMyQuizAttempts, getQuizQuest
 import { useStudent } from '../context/StudentContext';
 
 export default function Quizzes() {
-  const { classId, studentId } = useStudent();
+  const { classId, classCode, className, studentId } = useStudent();
   const [view, setView] = useState('list'); // 'list', 'quiz', 'results'
   const [quizzes, setQuizzes] = useState([]);
   const [currentQuiz, setCurrentQuiz] = useState(null);
@@ -145,33 +145,16 @@ export default function Quizzes() {
   const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0;
 
   if (view === 'list') {
-    console.log('Rendering quiz list view');
-    console.log('Quizzes state:', quizzes);
-    console.log('Loading state:', loading);
-    console.log('Error state:', error);
-    console.log('View state:', view);
     return (
       <div>
-        <PageHeader title="Available Quizzes" subtitle="Take quizzes assigned to your class" />
-        
-        {/* Debug info */}
-        <div className="mb-4 p-2 bg-slate-100 rounded text-xs">
-          <p>View: {view} | Class ID: {classId} | Quizzes: {quizzes.length} | Loading: {loading.toString()}</p>
-          <button 
-            onClick={() => {
-              console.log('Force resetting view to list');
-              setView('list');
-              setCurrentQuiz(null);
-              setQuestions([]);
-              setAnswers({});
-              setAttemptId(null);
-              setResults(null);
-              fetchQuizzes();
-            }}
-            className="mt-2 px-2 py-1 bg-blue-500 text-white text-xs rounded"
-          >
-            Force Reset
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <PageHeader title="Available Quizzes" subtitle="Take quizzes assigned to your class" />
+          {classCode && (
+            <div className="px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              Class ID: {classCode} {className ? `(${className})` : ''}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -183,17 +166,16 @@ export default function Quizzes() {
             <p className="text-sm text-red-600">{error}</p>
           </div>
         ) : quizzes.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-sm text-slate-500">No quizzes available</p>
-            <p className="text-xs text-slate-400 mt-1">Class ID: {classId}</p>
+          <div className="text-center py-12 edu-card">
+            <p className="text-sm font-semibold text-slate-700">No quizzes available yet</p>
+            <p className="text-xs text-slate-400 mt-1">Class ID: {classCode || classId || 'Unassigned'} {className ? `(${className})` : ''}</p>
             <button 
               onClick={() => {
-                console.log('Refreshing quizzes...');
                 fetchQuizzes();
               }}
-              className="mt-4 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600"
+              className="mt-4 px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors"
             >
-              Refresh
+              Refresh Quizzes
             </button>
           </div>
         ) : (

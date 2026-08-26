@@ -43,6 +43,12 @@ app.include_router(report_cards.router,  prefix="/api/report-cards",  tags=["Rep
 app.include_router(teacher.router,       prefix="/api/teacher",       tags=["Teacher Dashboard"])
 app.include_router(classes.router,       prefix="/classes",           tags=["Classes"])
 
+import os
+from fastapi.staticfiles import StaticFiles
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("uploads/assignments", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 Base.metadata.create_all(bind=engine)
 
 @app.get("/")

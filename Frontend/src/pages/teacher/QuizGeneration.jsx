@@ -11,6 +11,7 @@ import {
   getQuizQuestions,
   deleteQuizQuestion,
   addQuestionManually,
+  addQuestionsBatch,
 } from '../../services/quizzesService';
 import { fetchMyClasses } from '../../services/teacherService';
 
@@ -33,6 +34,7 @@ export default function QuizGeneration() {
   const [generatingFile, setGeneratingFile] = useState(false);
   const [creating, setCreating] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [savingManual, setSavingManual] = useState(false);
   const [quizId, setQuizId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -244,10 +246,91 @@ export default function QuizGeneration() {
     try {
       await publishQuiz(quizId);
       setSuccess('Quiz published successfully for students in the class!');
+      fetchQuizzesList();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to publish quiz');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleSaveManualQuestions = async () => {
+    setError('');
+    setSuccess('');
+
+    const validQuestions = questions.filter((q) => q.question && q.question.trim());
+    if (validQuestions.length === 0) {
+      setError('Please fill in at least one question prompt with its options before saving.');
+      return;
+    }
+
+    for (let i = 0; i < validQuestions.length; i++) {
+      const q = validQuestions[i];
+      const filledOpts = q.options.filter((opt) => opt && opt.trim());
+      if (filledOpts.length < 2) {
+        setError(`Question ${i + 1} must have at least 2 options filled.`);
+        return;
+      }
+    }
+
+    let targetQuizId = quizId;
+
+    setSavingManual(true);
+    try {
+      if (!targetQuizId) {
+        if (!title.trim()) {
+          setError('Please provide a Quiz Title in Step 1 before saving manual questions.');
+          setSavingManual(false);
+          return;
+        }
+        if (!classId) {
+          setError('Please select an assigned class in Step 1.');
+          setSavingManual(false);
+          return;
+        }
+        if (!subject) {
+          setError('Please select a subject in Step 1.');
+          setSavingManual(false);
+          return;
+        }
+
+        const createdQuiz = await createQuiz({
+          title: title.trim(),
+          subject,
+          topic: title.trim(),
+          class_id: parseInt(classId),
+          time_limit: parseInt(duration),
+          is_published: false,
+        });
+        targetQuizId = createdQuiz.id;
+        setQuizId(createdQuiz.id);
+      }
+
+      const formatted = validQuestions.map((q, idx) => ({
+        question_text: q.question.trim(),
+        question_type: 'mcq',
+        option_a: q.options[0]?.trim() || 'Option A',
+        option_b: q.options[1]?.trim() || 'Option B',
+        option_c: q.options[2]?.trim() || 'Option C',
+        option_d: q.options[3]?.trim() || 'Option D',
+        correct_answer: String.fromCharCode(65 + (q.correctAnswer ?? 0)),
+        marks: 1,
+        order_num: generatedQuestions.length + idx + 1,
+      }));
+
+      await addQuestionsBatch(targetQuizId, formatted);
+      setSuccess(`${formatted.length} manual question(s) saved to quiz successfully! You can now preview and publish below.`);
+      await loadPreviewQuestions(targetQuizId);
+      fetchQuizzesList();
+
+      setQuestions([
+        { id: Date.now(), question: '', options: ['', '', '', ''], correctAnswer: 0 },
+      ]);
+    } catch (err) {
+      console.error('Failed to save manual questions:', err);
+      setError(err.response?.data?.detail || 'Failed to save manual questions to quiz');
+    } finally {
+      setSavingManual(false);
     }
   };
 
@@ -401,7 +484,7 @@ export default function QuizGeneration() {
                 {assignedClasses.length === 0 && <option value="">No classes assigned</option>}
                 {assignedClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {c.code ? `(${c.code})` : ''}
+                    {c.code ? `[${c.code}] ${c.name}` : c.name}
                   </option>
                 ))}
               </select>
@@ -715,28 +798,51 @@ export default function QuizGeneration() {
 
       {/* 4. Manual Questions Builder */}
       <div className="edu-card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-slate-900">4. Manual Question Builder</h2>
-          <button
-            type="button"
-            onClick={addQuestion}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Manual Question
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">4. Manual Question Builder</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Draft your own custom MCQs and save them directly to this quiz.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={addQuestion}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 rounded-xl transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Another Question
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveManualQuestions}
+              disabled={savingManual}
+              className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-sm disabled:opacity-50"
+            >
+              {savingManual ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              )}
+              Save Manual Questions to Quiz
+            </button>
+          </div>
         </div>
 
         <div className="space-y-6">
           {questions.map((q, qIndex) => (
-            <div key={q.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div key={q.id} className="p-5 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex items-start justify-between gap-4 mb-4">
-                <span className="font-semibold text-slate-700">Question {qIndex + 1}</span>
+                <span className="font-semibold text-slate-800 text-sm">Question {qIndex + 1}</span>
                 {questions.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeQuestion(q.id)}
                     className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
+                    title="Remove this question"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -751,6 +857,9 @@ export default function QuizGeneration() {
                 className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
 
+              <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
+                Options (Select radio button for the correct option):
+              </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                 {q.options.map((opt, optIndex) => (
                   <div key={optIndex} className="flex items-center gap-2">
@@ -759,20 +868,50 @@ export default function QuizGeneration() {
                       name={`correct-${q.id}`}
                       checked={q.correctAnswer === optIndex}
                       onChange={() => updateQuestion(q.id, 'correctAnswer', optIndex)}
-                      className="text-emerald-500 focus:ring-emerald-500"
+                      className="text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+                      title="Mark as correct answer"
                     />
                     <input
                       type="text"
                       value={opt}
                       onChange={(e) => updateOption(q.id, optIndex, e.target.value)}
                       placeholder={`Option ${String.fromCharCode(65 + optIndex)}`}
-                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      className={`flex-1 px-3 py-2 text-sm bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                        q.correctAnswer === optIndex
+                          ? 'border-emerald-500 font-semibold ring-1 ring-emerald-500/30'
+                          : 'border-slate-200'
+                      }`}
                     />
                   </div>
                 ))}
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={addQuestion}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Another Question
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSaveManualQuestions}
+            disabled={savingManual}
+            className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50"
+          >
+            {savingManual ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-white" />
+            )}
+            Save All Manual Questions to Quiz
+          </button>
         </div>
       </div>
     </div>
