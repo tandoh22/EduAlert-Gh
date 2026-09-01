@@ -41,5 +41,6 @@ class SubmissionResponse(BaseModel):
     ai_score: Optional[int] = None
     teacher_score: Optional[int] = None
     submitted_at: Optional[datetime] = None
+    assignment: Optional[AssignmentResponse] = None
     class Config:
         from_attributes = True

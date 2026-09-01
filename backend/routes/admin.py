@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
@@ -9,9 +9,18 @@ from models.score import Score
 from models.assignment import Assignment, Submission
 from models.quiz import Quiz
 from models.enrollment import Enrollment
+from models.teacher_assignment import TeacherAssignment
+from models.class_model import Class
 from core.dependencies import require_admin
+from pydantic import BaseModel
+from typing import Optional
 
 router = APIRouter()
+
+
+class AddAssignmentRequest(BaseModel):
+    class_id: int
+    subject: str
 
 
 @router.get("/dashboard")
@@ -141,3 +150,138 @@ def get_at_risk_students(
             "flagged_at": p.generated_at,
         })
     return results
+
+
+# ── Teacher Management Endpoints ─────────────────────────────────
+
+
+@router.get("/teachers")
+def list_teachers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """List all approved teachers with their current class+subject assignments."""
+    teachers = (
+        db.query(User)
+        .filter(User.role == "teacher", User.status == "approved")
+        .order_by(User.full_name)
+        .all()
+    )
+
+    result = []
+    for t in teachers:
+        assignments = (
+            db.query(TeacherAssignment)
+            .filter(TeacherAssignment.teacher_id == t.id)
+            .all()
+        )
+        assignment_list = []
+        for a in assignments:
+            cls = db.query(Class).filter(Class.id == a.class_id).first()
+            assignment_list.append({
+                "id": a.id,
+                "class_id": a.class_id,
+                "class_name": cls.name if cls else "Unknown",
+                "subject": a.subject,
+                "term": a.term,
+                "year": a.year,
+            })
+        result.append({
+            "id": t.id,
+            "full_name": t.full_name,
+            "email": t.email,
+            "school": t.school,
+            "assignments": assignment_list,
+        })
+    return result
+
+
+@router.post("/teachers/{teacher_id}/assignments")
+def add_teacher_assignment(
+    teacher_id: int,
+    body: AddAssignmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Add a new class+subject assignment to an existing approved teacher."""
+    teacher = db.query(User).filter(
+        User.id == teacher_id, User.role == "teacher", User.status == "approved"
+    ).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Teacher not found or not approved.")
+
+    target_class = db.query(Class).filter(Class.id == body.class_id).first()
+    if not target_class:
+        raise HTTPException(status_code=404, detail="Class not found.")
+
+    if not body.subject or not body.subject.strip():
+        raise HTTPException(status_code=400, detail="Subject is required.")
+
+    if body.subject not in target_class.subjects:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{body.subject}' is not offered in {target_class.name}. Available: {', '.join(target_class.subjects)}",
+        )
+
+    existing = (
+        db.query(TeacherAssignment)
+        .filter(
+            TeacherAssignment.teacher_id == teacher_id,
+            TeacherAssignment.class_id == body.class_id,
+            TeacherAssignment.subject == body.subject,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{teacher.full_name} is already assigned to {body.subject} in {target_class.name}.",
+        )
+
+    new_assignment = TeacherAssignment(
+        teacher_id=teacher_id,
+        class_id=body.class_id,
+        subject=body.subject,
+        term="Semester 2",
+        year=2025,
+    )
+    db.add(new_assignment)
+    db.commit()
+    db.refresh(new_assignment)
+
+    return {
+        "message": f"{teacher.full_name} assigned to {body.subject} in {target_class.name}.",
+        "assignment": {
+            "id": new_assignment.id,
+            "class_id": new_assignment.class_id,
+            "class_name": target_class.name,
+            "subject": new_assignment.subject,
+            "term": new_assignment.term,
+            "year": new_assignment.year,
+        },
+    }
+
+
+@router.delete("/teacher-assignments/{assignment_id}")
+def remove_teacher_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Remove a specific teacher-class assignment."""
+    assignment = db.query(TeacherAssignment).filter(
+        TeacherAssignment.id == assignment_id
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+
+    teacher = db.query(User).filter(User.id == assignment.teacher_id).first()
+    cls = db.query(Class).filter(Class.id == assignment.class_id).first()
+    teacher_name = teacher.full_name if teacher else "Unknown"
+    class_name = cls.name if cls else "Unknown"
+
+    db.delete(assignment)
+    db.commit()
+
+    return {"message": f"Removed {teacher_name} from {assignment.subject} in {class_name}."}
+

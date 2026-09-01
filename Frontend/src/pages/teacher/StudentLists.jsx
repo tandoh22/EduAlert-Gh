@@ -43,15 +43,19 @@ export default function StudentLists() {
     const matchesClass = !selectedClass || s.class_name === selectedClass;
     const matchesGender =
       !selectedGender ||
-      (s.gender && s.gender.toLowerCase() === selectedGender.toLowerCase());
+      (s.gender && (
+        s.gender.toLowerCase() === selectedGender.toLowerCase() ||
+        (selectedGender.toLowerCase() === 'male' && (s.gender.toLowerCase() === 'm' || s.gender.toLowerCase() === 'male')) ||
+        (selectedGender.toLowerCase() === 'female' && (s.gender.toLowerCase() === 'f' || s.gender.toLowerCase() === 'female'))
+      ));
     return matchesSearch && matchesClass && matchesGender;
   });
 
   const maleCount = students.filter(
-    (s) => s.gender && s.gender.toLowerCase() === 'm' || s.gender === 'Male'
+    (s) => s.gender && (s.gender.toUpperCase() === 'M' || s.gender.toLowerCase() === 'male')
   ).length;
   const femaleCount = students.filter(
-    (s) => s.gender && s.gender.toLowerCase() === 'f' || s.gender === 'Female'
+    (s) => s.gender && (s.gender.toUpperCase() === 'F' || s.gender.toLowerCase() === 'female')
   ).length;
 
   if (loading) {
@@ -203,7 +207,11 @@ export default function StudentLists() {
                     {s.class_name || 'Assigned Class'}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
-                    {s.gender === 'M' ? 'Male' : s.gender === 'F' ? 'Female' : s.gender || 'N/A'}
+                    {s.gender?.toUpperCase() === 'M' || s.gender?.toLowerCase() === 'male'
+                      ? 'Male'
+                      : s.gender?.toUpperCase() === 'F' || s.gender?.toLowerCase() === 'female'
+                      ? 'Female'
+                      : s.gender || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-500">
                     {s.school || 'Achimota Senior High School'}

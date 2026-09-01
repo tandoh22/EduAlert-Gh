@@ -4,6 +4,7 @@ import PageHeader from '../components/PageHeader';
 import SubjectTag from '../components/SubjectTag';
 import LoadingState, { EmptyState, ErrorState } from '../components/LoadingState';
 import { useStudent } from '../context/StudentContext';
+import { getStoredUser } from '../services/authService';
 import {
   fetchClassAssignments,
   fetchMySubmissions,
@@ -22,6 +23,7 @@ import {
 
 export default function Dashboard() {
   const { classId, loading: profileLoading, error: profileError } = useStudent();
+  const user = getStoredUser();
   const [stats, setStats] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -78,7 +80,7 @@ export default function Dashboard() {
   if (!classId) {
     return (
       <div>
-        <PageHeader title="Dashboard" subtitle="Your overview for this term" />
+        <PageHeader title={`Welcome back, ${user?.full_name || 'Student'}`} subtitle="Your overview for this semester" />
         <div className="edu-card p-8 text-center">
           <p className="text-sm text-slate-600 mb-4">You haven't chosen a class yet.</p>
           <Link
@@ -94,7 +96,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Your overview for this term" />
+      <PageHeader title={`Welcome back, ${user?.full_name || 'Student'}`} subtitle="Your overview for this semester" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[

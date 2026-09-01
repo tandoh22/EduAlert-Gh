@@ -13,6 +13,7 @@ import {
 import { Link } from 'react-router-dom';
 import LoadingState, { EmptyState } from '../../components/LoadingState';
 import { fetchPendingUsers, fetchOverview } from '../../services/headmasterService';
+import { getStoredUser } from '../../services/authService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const RISK_COLORS = { low: '#22c55e', medium: '#eab308', high: '#ef4444' };
@@ -22,6 +23,7 @@ export default function HeadmasterDashboard() {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const user = getStoredUser();
 
   useEffect(() => {
     Promise.all([fetchOverview(), fetchPendingUsers()])
@@ -84,7 +86,7 @@ export default function HeadmasterDashboard() {
 
   return (
     <div>
-      <PageHeader title="Headmaster Dashboard" subtitle="Welcome back" />
+      <PageHeader title={`Welcome back, ${user?.full_name || 'Admin'}`} subtitle="School-wide performance overview for this semester" />
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">

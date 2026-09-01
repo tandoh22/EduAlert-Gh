@@ -9,7 +9,7 @@ from database import get_db
 from models.quiz import Quiz, QuizQuestion, QuizAttempt, QuizAnswer
 from models.student import Student
 from schemas.quiz import (
-    QuizCreate, QuizResponse, QuizQuestionCreate,
+    QuizCreate, QuizUpdate, QuizResponse, QuizQuestionCreate,
     QuizQuestionResponse, QuizSubmit, QuizAttemptResponse
 )
 from core.dependencies import require_teacher, get_current_user, get_current_student
@@ -506,6 +506,43 @@ def get_teacher_quizzes(
     ).order_by(Quiz.created_at.desc()).all()
 
 
+@router.put("/{quiz_id}", response_model=QuizResponse)
+def update_quiz(
+    quiz_id: int,
+    data: QuizUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    quiz = db.query(Quiz).filter(
+        Quiz.id == quiz_id,
+        Quiz.teacher_id == current_user.id
+    ).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    if data.class_id is not None and current_user.role not in ("admin", "headmaster"):
+        from models.teacher_assignment import TeacherAssignment
+        assignments = db.query(TeacherAssignment).filter(
+            TeacherAssignment.teacher_id == current_user.id,
+            TeacherAssignment.class_id == data.class_id,
+        ).all()
+        assigned_subjects = [a.subject.lower() for a in assignments if a.subject]
+        if current_user.subject:
+            assigned_subjects.append(current_user.subject.lower())
+        if not assignments and not (current_user.subject and data.subject and data.subject.lower() == current_user.subject.lower()):
+            raise HTTPException(status_code=400, detail="You are not assigned to teach this class.")
+        if data.subject and assigned_subjects and data.subject.lower() not in assigned_subjects:
+            raise HTTPException(status_code=400, detail=f"You are not assigned to teach '{data.subject}' in this class.")
+
+    update_dict = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+    for field, value in update_dict.items():
+        setattr(quiz, field, value)
+
+    db.commit()
+    db.refresh(quiz)
+    return quiz
+
+
 @router.delete("/{quiz_id}")
 def delete_quiz(
     quiz_id: int,
@@ -870,6 +907,22 @@ def publish_quiz(
     db.commit()
     return {"message": "Quiz published successfully", "is_published": True}
 
+@router.post("/{quiz_id}/unpublish")
+def unpublish_quiz(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    quiz = db.query(Quiz).filter(
+        Quiz.id == quiz_id,
+        Quiz.teacher_id == current_user.id
+    ).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    quiz.is_published = False
+    db.commit()
+    return {"message": "Quiz unpublished successfully", "is_published": False}
+
 @router.post("/{quiz_id}/start", response_model=QuizAttemptResponse)
 def start_quiz(
     quiz_id: int,
@@ -925,7 +978,35 @@ def submit_quiz(
         marks_awarded = 0.0
         ai_feedback = None
 
-        if question.question_type in ["mcq", "true_false"]:
+        if question.question_type == "mcq":
+            raw_student_ans = str(ans.student_answer or "").strip()
+            raw_correct_ans = str(question.correct_answer or "").strip()
+
+            if raw_student_ans.upper() == raw_correct_ans.upper():
+                is_correct = True
+            else:
+                opts = {
+                    "A": str(question.option_a or "").strip(),
+                    "B": str(question.option_b or "").strip(),
+                    "C": str(question.option_c or "").strip(),
+                    "D": str(question.option_d or "").strip(),
+                }
+                text_to_letter = {v.upper(): k for k, v in opts.items() if v}
+                student_letter = text_to_letter.get(raw_student_ans.upper(), raw_student_ans.upper())
+                correct_letter = text_to_letter.get(raw_correct_ans.upper(), raw_correct_ans.upper())
+
+                if student_letter in opts and correct_letter in opts and student_letter == correct_letter:
+                    is_correct = True
+                elif opts.get(correct_letter, "").upper() == raw_student_ans.upper():
+                    is_correct = True
+                elif opts.get(student_letter, "").upper() == raw_correct_ans.upper():
+                    is_correct = True
+                else:
+                    is_correct = False
+
+            marks_awarded = float(question.marks) if is_correct else 0.0
+
+        elif question.question_type == "true_false":
             is_correct = (
                 str(ans.student_answer or "").strip().upper() ==
                 str(question.correct_answer or "").strip().upper()

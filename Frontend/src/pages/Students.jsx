@@ -6,6 +6,7 @@ export default function Students() {
   const [students, setStudents] = useState([])
   const [name, setName] = useState('')
   const [studentClass, setStudentClass] = useState('')
+  const [gender, setGender] = useState('Male')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -26,9 +27,10 @@ export default function Students() {
     setMessage('')
 
     try {
-      await createStudent({ full_name: name, class_name: studentClass })
+      await createStudent({ full_name: name, class_name: studentClass, gender })
       setName('')
       setStudentClass('')
+      setGender('Male')
       setMessage('Student added successfully.')
       loadStudents()
     } catch (error) {
@@ -64,6 +66,17 @@ export default function Students() {
                   placeholder="Enter class"
                   className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Gender</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
               </div>
               <button 
                 type="submit" 

@@ -29,13 +29,6 @@ def record_score(data: ScoreCreate, db: Session = Depends(get_db), current_user:
     db.refresh(score)
     return score
 
-@router.get("/me", response_model=List[ScoreResponse])
-def get_my_scores(
-    db: Session = Depends(get_db),
-    student: Student = Depends(get_current_student),
-):
-    return db.query(Score).filter(Score.student_id == student.id).all()
-
 @router.get("/student/{student_id}", response_model=List[ScoreResponse])
 def get_student_scores(student_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):
     student = db.query(Student).filter(Student.id == student_id, Student.teacher_id == current_user.id).first()

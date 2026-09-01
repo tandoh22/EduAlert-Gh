@@ -3,6 +3,8 @@ import PageHeader from '../../components/PageHeader';
 import { Plus, Trash2, Sparkles, Loader2, Clock, Upload, FileText, CheckCircle2, X, Hash } from 'lucide-react';
 import {
   createQuiz,
+  updateQuiz,
+  unpublishQuiz,
   generateQuizQuestions,
   generateQuizQuestionsFromFile,
   publishQuiz,
@@ -36,6 +38,7 @@ export default function QuizGeneration() {
   const [publishing, setPublishing] = useState(false);
   const [savingManual, setSavingManual] = useState(false);
   const [quizId, setQuizId] = useState(null);
+  const [isPublished, setIsPublished] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [quizzesList, setQuizzesList] = useState([]);
@@ -101,8 +104,27 @@ export default function QuizGeneration() {
     setQuizId(q.id);
     setTitle(q.title);
     setSubject(q.subject);
+    if (q.class_id) {
+      setClassId(q.class_id.toString());
+      const cls = assignedClasses.find((c) => c.id.toString() === q.class_id.toString());
+      if (cls?.subjects) {
+        setAvailableSubjects(cls.subjects);
+      }
+    }
     setDuration(q.time_limit?.toString() || '15');
+    setIsPublished(!!q.is_published);
+    setError('');
+    setSuccess(`Selected quiz: "${q.title}" (${q.is_published ? 'Published' : 'Draft Preview'}). You can edit details, update questions, or publish/unpublish.`);
     await loadPreviewQuestions(q.id);
+  };
+
+  const handleResetForNewQuiz = () => {
+    setQuizId(null);
+    setTitle('');
+    setIsPublished(false);
+    setGeneratedQuestions([]);
+    setError('');
+    setSuccess('Ready to create a new quiz.');
   };
 
   const handleDelete = async (quizIdToDelete) => {
@@ -218,19 +240,31 @@ export default function QuizGeneration() {
     }
 
     try {
-      const quiz = await createQuiz({
-        title,
-        subject,
-        topic: title,
-        class_id: parseInt(classId),
-        time_limit: parseInt(duration),
-        is_published: false,
-      });
-      setQuizId(quiz.id);
-      setSuccess('Quiz setup saved! Select the number of questions and click Generate below.');
+      if (quizId) {
+        await updateQuiz(quizId, {
+          title: title.trim(),
+          subject,
+          topic: title.trim(),
+          class_id: parseInt(classId),
+          time_limit: parseInt(duration),
+        });
+        setSuccess('Quiz details updated successfully! You can now generate/edit questions or publish.');
+      } else {
+        const quiz = await createQuiz({
+          title: title.trim(),
+          subject,
+          topic: title.trim(),
+          class_id: parseInt(classId),
+          time_limit: parseInt(duration),
+          is_published: false,
+        });
+        setQuizId(quiz.id);
+        setIsPublished(false);
+        setSuccess('Quiz setup saved! Select the number of questions and click Generate below.');
+      }
       fetchQuizzesList();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create quiz');
+      setError(err.response?.data?.detail || 'Failed to save quiz setup');
     } finally {
       setCreating(false);
     }
@@ -245,10 +279,32 @@ export default function QuizGeneration() {
 
     try {
       await publishQuiz(quizId);
+      setIsPublished(true);
       setSuccess('Quiz published successfully for students in the class!');
-      fetchQuizzesList();
+      await loadPreviewQuestions(quizId);
+      await fetchQuizzesList();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to publish quiz');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    if (!quizId) return;
+
+    setPublishing(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await unpublishQuiz(quizId);
+      setIsPublished(false);
+      setSuccess('Quiz moved back to Draft status. Students cannot take it until you republish.');
+      await loadPreviewQuestions(quizId);
+      await fetchQuizzesList();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to unpublish quiz');
     } finally {
       setPublishing(false);
     }
@@ -453,7 +509,27 @@ export default function QuizGeneration() {
 
       {/* Quiz Setup Form */}
       <div className="edu-card p-6 mb-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-6">1. Setup Quiz Details</h2>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              {quizId ? '1. Edit Quiz Details' : '1. Setup Quiz Details'}
+            </h2>
+            {quizId && (
+              <p className="text-xs text-slate-500 mt-0.5">
+                Currently editing Quiz ID #{quizId}: <span className="font-semibold text-slate-700">{title || 'Untitled'}</span> ({isPublished ? 'Published' : 'Draft Preview'})
+              </p>
+            )}
+          </div>
+          {quizId && (
+            <button
+              type="button"
+              onClick={handleResetForNewQuiz}
+              className="px-3.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+            >
+              + Create New Quiz Instead
+            </button>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -531,13 +607,22 @@ export default function QuizGeneration() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            {quizId && (
+              <button
+                type="button"
+                onClick={handleResetForNewQuiz}
+                className="px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Cancel / New Quiz
+              </button>
+            )}
             <button
               type="submit"
               disabled={creating}
               className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-white text-sm font-medium rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-60"
             >
               {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save Quiz Setup
+              {quizId ? 'Update Quiz Details' : 'Save Quiz Setup'}
             </button>
           </div>
         </form>
@@ -673,7 +758,7 @@ export default function QuizGeneration() {
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={() => loadPreviewQuestions(quizId)}
@@ -682,15 +767,39 @@ export default function QuizGeneration() {
                 Refresh Questions
               </button>
 
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={publishing || generatedQuestions.length === 0}
-                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50"
-              >
-                {publishing && <Loader2 className="w-4 h-4 animate-spin text-white" />}
-                Publish Quiz to Students ({generatedQuestions.length} Questions)
-              </button>
+              {isPublished ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleUnpublish}
+                    disabled={publishing}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm disabled:opacity-50"
+                  >
+                    {publishing && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+                    Unpublish (Move to Draft)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={publishing || generatedQuestions.length === 0}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                  >
+                    {publishing && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+                    Republish Quiz to Students ({generatedQuestions.length} Questions)
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handlePublish}
+                  disabled={publishing || generatedQuestions.length === 0}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                >
+                  {publishing && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+                  Publish Quiz to Students ({generatedQuestions.length} Questions)
+                </button>
+              )}
             </div>
           </div>
 

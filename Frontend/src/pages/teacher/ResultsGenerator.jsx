@@ -90,6 +90,20 @@ export default function ResultsGenerator() {
     const subs = cls?.subjects || [];
     setAvailableSubjects(subs);
     setSelectedSubject(subs.length > 0 ? subs[0] : '');
+    setGeneratedResults(null);
+    setSuccess('');
+    setError('');
+    setStudents([]);
+    setExamScores({});
+  };
+
+  const handleSubjectChange = (subjectName) => {
+    setSelectedSubject(subjectName);
+    setGeneratedResults(null);
+    setSuccess('');
+    setError('');
+    setStudents([]);
+    setExamScores({});
   };
 
   // Fetch students continuous assessment scores when class or subject changes
@@ -99,14 +113,15 @@ export default function ResultsGenerator() {
   }, [selectedClass, selectedSubject]);
 
   const loadStudentScores = async () => {
+    if (!selectedClass) return;
     setLoadingStudents(true);
     setError('');
     try {
       const data = await fetchClassStudentScores(selectedClass, selectedSubject);
-      setStudents(data);
+      setStudents(data || []);
       // Initialize default exam scores from backend or 0
       const initialExamScores = {};
-      data.forEach((s) => {
+      (data || []).forEach((s) => {
         initialExamScores[s.id] = s.default_exam_score || 0;
       });
       setExamScores(initialExamScores);
@@ -330,7 +345,7 @@ export default function ResultsGenerator() {
             </label>
             <select
               value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
+              onChange={(e) => handleSubjectChange(e.target.value)}
               className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
             >
               {availableSubjects.length === 0 ? (
@@ -351,7 +366,11 @@ export default function ResultsGenerator() {
             </label>
             <select
               value={semester}
-              onChange={(e) => setSemester(e.target.value)}
+              onChange={(e) => {
+                setSemester(e.target.value);
+                setGeneratedResults(null);
+                setSuccess('');
+              }}
               className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
               <option value="1">Semester 1</option>
@@ -365,7 +384,11 @@ export default function ResultsGenerator() {
             </label>
             <select
               value={academicYear}
-              onChange={(e) => setAcademicYear(e.target.value)}
+              onChange={(e) => {
+                setAcademicYear(e.target.value);
+                setGeneratedResults(null);
+                setSuccess('');
+              }}
               className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             >
               <option value="2023-2024">2023-2024</option>

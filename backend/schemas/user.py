@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
     subject: Optional[str] = None
     school: Optional[str] = None
     admitted_course: Optional[str] = None  # required for students only, validated in the endpoint
+    gender: Optional[str] = None  # required for students only, validated in the endpoint
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -28,6 +29,7 @@ class UserResponse(BaseModel):
     class_id: Optional[int] = None
     class_name: Optional[str] = None
     admitted_course: Optional[str] = None
+    gender: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -43,3 +45,4 @@ class ClassSubjectPick(BaseModel):
 
 class ApproveUserRequest(BaseModel):
     assignments: List[ClassSubjectPick] = []
+    gender: Optional[str] = None

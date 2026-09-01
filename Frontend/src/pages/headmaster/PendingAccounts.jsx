@@ -14,6 +14,8 @@ export default function PendingAccounts() {
 
   // Teacher only: { [userId]: { [classId]: subject } }
   const [teacherPicks, setTeacherPicks] = useState({});
+  // Student only: { [userId]: gender }
+  const [studentGenders, setStudentGenders] = useState({});
 
   const load = () => {
     setLoading(true);
@@ -54,11 +56,11 @@ export default function PendingAccounts() {
     }));
   };
 
-  const doApprove = async (userId, assignments) => {
+  const doApprove = async (userId, assignments = [], gender = undefined) => {
     setActioningId(userId);
     setError(null);
     try {
-      await approveUser(userId, assignments);
+      await approveUser(userId, assignments, gender);
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       setExpandedId(null);
     } catch (err) {
@@ -76,7 +78,8 @@ export default function PendingAccounts() {
     }
     // Students: the admin's job is just approval — they pick their own
     // class/electives afterward via self-enrollment.
-    doApprove(user.id, []);
+    const studentGender = user.gender || studentGenders[user.id] || undefined;
+    doApprove(user.id, [], studentGender);
   };
 
   const handleConfirmTeacher = (user) => {
@@ -138,10 +141,32 @@ export default function PendingAccounts() {
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{u.full_name}</p>
                     <p className="text-xs text-slate-500 mt-0.5">{u.email}</p>
-                    {!isTeacher && u.admitted_course && (
-                      <p className="text-xs text-slate-500 mt-1">
-                        Admitted into <span className="font-medium text-slate-700">{u.admitted_course}</span>
-                      </p>
+                    {!isTeacher && (
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        {u.admitted_course && (
+                          <span>
+                            Admitted into <span className="font-medium text-slate-700">{u.admitted_course}</span>
+                          </span>
+                        )}
+                        {u.gender ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
+                            {u.gender === 'M' || u.gender?.toLowerCase() === 'male' ? 'Male' : u.gender === 'F' || u.gender?.toLowerCase() === 'female' ? 'Female' : u.gender}
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400">Gender:</span>
+                            <select
+                              value={studentGenders[u.id] || ''}
+                              onChange={(e) => setStudentGenders((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                              className="text-xs border border-slate-200 rounded-md px-2 py-0.5 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            >
+                              <option value="">Select gender...</option>
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center gap-3">

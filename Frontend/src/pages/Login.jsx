@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, GraduationCap } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { loginUser } from "../services/authService";
+import logoIconLight from "../assets/edualert_logo_icon_light.svg";
 
 const ROLES = [
   { value: "student", label: "Student" },
@@ -25,6 +26,7 @@ function getErrorMessage(err) {
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState("student");
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -69,8 +71,8 @@ export default function LoginPage() {
         {/* LEFT: Brand panel */}
         <div className="w-full md:w-1/2 bg-gradient-to-b from-blue-950 to-blue-900 text-white p-8 md:p-12 flex flex-col justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-green-500 flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="w-6 h-6 text-blue-950" />
+            <div className="w-11 h-11 flex items-center justify-center flex-shrink-0">
+              <img src={logoIconLight} alt="EduAlert GH" className="w-11 h-11" />
             </div>
             <div>
               <div className="text-base font-bold leading-tight">EduAlert GH</div>
@@ -88,20 +90,6 @@ export default function LoginPage() {
               AI lesson notes, quiz creation, submissions and early-warning
               alerts — built for Senior High Schools across Ghana.
             </p>
-            <div className="flex gap-3">
-              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex-1">
-                <div className="text-xl font-extrabold">1,022</div>
-                <div className="text-xs text-blue-300 mt-0.5">Students</div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex-1">
-                <div className="text-xl font-extrabold">58</div>
-                <div className="text-xs text-blue-300 mt-0.5">Teachers</div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex-1">
-                <div className="text-xl font-extrabold">94%</div>
-                <div className="text-xs text-blue-300 mt-0.5">Attendance</div>
-              </div>
-            </div>
           </div>
 
           <div className="text-xs text-blue-300">© 2026 EduAlert Ghana · Accra</div>
@@ -151,11 +139,19 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     className="w-full pl-10 pr-3.5 py-3 text-sm border border-slate-200 rounded-lg bg-white text-slate-900 placeholder-slate-400 outline-none focus:border-blue-800 focus:ring-4 focus:ring-blue-800/10 transition"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
               {/* Role selector */}
-              <div className="mb-6">
+               <div className="mb-6">
                 <label className="block text-sm font-semibold text-slate-900 mb-2">I am a...</label>
                 <div className="grid grid-cols-3 gap-2">
                   {ROLES.map((r) => (

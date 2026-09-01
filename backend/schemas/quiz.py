@@ -35,6 +35,15 @@ class QuizCreate(BaseModel):
     time_limit: int = 30
     due_date: Optional[datetime] = None
 
+class QuizUpdate(BaseModel):
+    title: Optional[str] = None
+    subject: Optional[str] = None
+    topic: Optional[str] = None
+    class_id: Optional[int] = None
+    time_limit: Optional[int] = None
+    due_date: Optional[datetime] = None
+    is_published: Optional[bool] = None
+
 class QuizResponse(BaseModel):
     id: int
     title: str
@@ -67,5 +76,6 @@ class QuizAttemptResponse(BaseModel):
     is_completed: bool
     started_at: datetime
     submitted_at: Optional[datetime]
+    quiz: Optional[QuizResponse] = None
     class Config:
         from_attributes = True

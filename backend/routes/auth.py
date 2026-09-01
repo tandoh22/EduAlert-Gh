@@ -28,6 +28,7 @@ def _build_user_response(user: User, db: Session) -> dict:
         "class_id": None,
         "class_name": None,
         "admitted_course": None,
+        "gender": None,
     }
     if user.role == "student":
         student = db.query(Student).filter(Student.user_id == user.id).first()
@@ -35,6 +36,7 @@ def _build_user_response(user: User, db: Session) -> dict:
             data["student_id"] = student.student_id or f"ACH2025{student.id:03d}"
             data["class_name"] = student.class_name
             data["admitted_course"] = student.admitted_course
+            data["gender"] = student.gender
             enrollment = (
                 db.query(Enrollment)
                 .filter(Enrollment.student_id == student.id)
@@ -57,8 +59,11 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail="Only student or teacher accounts can self-register.",
         )
 
-    if user_data.role == "student" and not user_data.admitted_course:
-        raise HTTPException(status_code=400, detail="Please select the course you were admitted into.")
+    if user_data.role == "student":
+        if not user_data.admitted_course:
+            raise HTTPException(status_code=400, detail="Please select the course you were admitted into.")
+        if not user_data.gender:
+            raise HTTPException(status_code=400, detail="Please select your gender.")
 
     existing = db.query(User).filter(User.email == user_data.email).first()
     if existing:
@@ -85,6 +90,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             full_name=new_user.full_name,
             class_name="Unassigned",
             admitted_course=user_data.admitted_course,
+            gender=user_data.gender,
             school=new_user.school,
             user_id=new_user.id,
         )
@@ -188,8 +194,11 @@ def approve_user(
 
     if user.role == "student":
         student = db.query(Student).filter(Student.user_id == user.id).first()
-        if student and not student.student_id:
-            student.student_id = f"ACH2025{student.id:03d}"
+        if student:
+            if not student.student_id:
+                student.student_id = f"ACH2025{student.id:03d}"
+            if data.gender:
+                student.gender = data.gender
 
     user.status = "approved"
     db.commit()

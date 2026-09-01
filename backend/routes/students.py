@@ -12,6 +12,8 @@ from models.prediction import Prediction
 from models.enrollment import Enrollment
 from models.teacher_assignment import TeacherAssignment
 from models.class_model import Class
+from models.quiz import QuizAttempt
+from models.assignment import Submission
 from schemas.student import StudentCreate, StudentUpdate, StudentResponse
 from core.dependencies import require_teacher, get_current_user, get_current_student, require_admin
 from core.curriculum import BROAD_COURSE_TO_CLASS_COURSES
@@ -154,6 +156,7 @@ def get_my_profile(
         "class_id": class_id,
         "class_code": class_code,
         "admitted_course": student.admitted_course,
+        "gender": student.gender,
         "school": student.school,
         "teacher_id": student.teacher_id,
     }
@@ -367,6 +370,16 @@ def get_student_performance(
 
     scores = db.query(Score).filter(Score.student_id == student_id).all()
     attendances = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+    quiz_attempts = (
+        db.query(QuizAttempt)
+        .filter(QuizAttempt.student_id == student_id, QuizAttempt.is_completed == True)
+        .all()
+    )
+    submissions = (
+        db.query(Submission)
+        .filter(Submission.student_id == student_id)
+        .all()
+    )
     prediction = (
         db.query(Prediction)
         .filter(Prediction.student_id == student_id)
@@ -374,9 +387,45 @@ def get_student_performance(
         .first()
     )
 
-    subject_scores: dict = {}
+    all_evaluations = []
     for s in scores:
-        subject_scores.setdefault(s.subject, []).append(s.score)
+        all_evaluations.append({
+            "subject": s.subject,
+            "score": float(s.score),
+            "date": s.recorded_at or datetime.utcnow(),
+            "type": "Exam",
+            "term": s.term,
+            "year": s.year,
+        })
+
+    for a in quiz_attempts:
+        if a.percentage is not None:
+            subj = a.quiz.subject if a.quiz and a.quiz.subject else "General Quiz"
+            all_evaluations.append({
+                "subject": subj,
+                "score": float(a.percentage),
+                "date": a.submitted_at or a.started_at or datetime.utcnow(),
+                "type": "Quiz",
+                "term": "Semester 2",
+                "year": 2025,
+            })
+
+    for sub in submissions:
+        sub_score = sub.teacher_score if sub.teacher_score is not None else sub.ai_score
+        if sub_score is not None:
+            subj = sub.assignment.subject if sub.assignment and sub.assignment.subject else "General Assignment"
+            all_evaluations.append({
+                "subject": subj,
+                "score": float(sub_score),
+                "date": sub.submitted_at or datetime.utcnow(),
+                "type": "Assignment",
+                "term": "Semester 2",
+                "year": 2025,
+            })
+
+    subject_scores: dict = {}
+    for item in all_evaluations:
+        subject_scores.setdefault(item["subject"], []).append(item["score"])
     subject_avgs = {
         subj: round(sum(vals) / len(vals), 1) for subj, vals in subject_scores.items()
     }
@@ -384,20 +433,20 @@ def get_student_performance(
     total_days = len(attendances)
     present = sum(1 for a in attendances if a.status == "present")
     attendance_rate = round(present / total_days * 100, 1) if total_days else 0
-    overall_avg = round(sum(s.score for s in scores) / len(scores), 1) if scores else 0
+    overall_avg = round(sum(item["score"] for item in all_evaluations) / len(all_evaluations), 1) if all_evaluations else 0
 
-    sorted_scores = sorted(scores, key=lambda x: (x.year, x.term))
-    mid = len(sorted_scores) // 2
-    first_half = sorted_scores[:mid] if mid else sorted_scores
-    second_half = sorted_scores[mid:] if mid else sorted_scores
-    first_avg = sum(s.score for s in first_half) / len(first_half) if first_half else 0
-    second_avg = sum(s.score for s in second_half) / len(second_half) if second_half else 0
+    sorted_evals = sorted(all_evaluations, key=lambda x: str(x["date"]))
+    mid = len(sorted_evals) // 2
+    first_half = sorted_evals[:mid] if mid else sorted_evals
+    second_half = sorted_evals[mid:] if mid else sorted_evals
+    first_avg = sum(s["score"] for s in first_half) / len(first_half) if first_half else 0
+    second_avg = sum(s["score"] for s in second_half) / len(second_half) if second_half else 0
     score_trend = round(second_avg - first_avg, 1)
 
     risk_factors = []
     if total_days and attendance_rate < 75:
         risk_factors.append("Low attendance")
-    if scores and overall_avg < 50:
+    if all_evaluations and overall_avg < 50:
         risk_factors.append("Low average score")
     if prediction and prediction.reason:
         risk_factors.append(prediction.reason)

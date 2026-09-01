@@ -44,16 +44,28 @@ def _teacher_assigned_subjects(db: Session, teacher: User) -> List[str]:
 
 def _can_access_student(db: Session, current_user: User, student_id: int) -> bool:
     """Admins can access any student. Teachers only students enrolled in
-    a class a TeacherAssignment row actually ties them to."""
+    a class a TeacherAssignment row actually ties them to, or students directly assigned."""
     if current_user.role in ("admin", "headmaster"):
         return True
     class_ids = _teacher_class_ids(db, current_user.id)
     if not class_ids:
-        return False
-    return db.query(Enrollment).filter(
+        student = db.query(Student).filter(Student.id == student_id).first()
+        return bool(student and student.teacher_id == current_user.id)
+    
+    enrolled = db.query(Enrollment).filter(
         Enrollment.student_id == student_id,
         Enrollment.class_id.in_(class_ids),
     ).first() is not None
+    if enrolled:
+        return True
+
+    assigned_classes = db.query(Class).filter(Class.id.in_(class_ids)).all()
+    assigned_names = [c.name for c in assigned_classes]
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if student and (student.class_name in assigned_names or student.teacher_id == current_user.id):
+        return True
+
+    return False
 
 
 @router.get("/at-risk")
@@ -197,15 +209,22 @@ def run_predictions_school_wide(
     return {"message": f"Predictions run for {len(results)} students", "results": results}
 
 
-@router.post("/run/{student_id}", response_model=PredictionResponse)
-def run_prediction(student_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):
-    student = db.query(Student).filter(Student.id == student_id).first()
+@router.post("/run/{student_identifier}", response_model=PredictionResponse)
+def run_prediction(student_identifier: str, db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):
+    student = None
+    if student_identifier.isdigit():
+        student = db.query(Student).filter(Student.id == int(student_identifier)).first()
     if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-    if not _can_access_student(db, current_user, student_id):
-        raise HTTPException(status_code=403, detail="Not authorized")
+        student = db.query(Student).filter(
+            (Student.student_id == student_identifier) |
+            (Student.student_id.ilike(student_identifier))
+        ).first()
+    if not student:
+        raise HTTPException(status_code=404, detail=f"Student '{student_identifier}' not found")
+    if not _can_access_student(db, current_user, student.id):
+        raise HTTPException(status_code=403, detail="Not authorized to access this student")
 
-    all_scores = db.query(Score).filter(Score.student_id == student_id).all()
+    all_scores = db.query(Score).filter(Score.student_id == student.id).all()
     if current_user.role not in ("admin", "headmaster"):
         assigned_subjects = _teacher_assigned_subjects(db, current_user)
         assigned_subs_lower = [s.lower() for s in assigned_subjects]
@@ -213,13 +232,13 @@ def run_prediction(student_id: int, db: Session = Depends(get_db), current_user:
     else:
         scores = all_scores
 
-    attendances = db.query(Attendance).filter(Attendance.student_id == student_id).all()
+    attendances = db.query(Attendance).filter(Attendance.student_id == student.id).all()
     if not scores and not attendances:
         raise HTTPException(status_code=400, detail="Not enough data to predict. Add scores and attendance first.")
     result = predict_student_risk(student, scores, attendances)
     suggestion = generate_suggestion(student.full_name, result)
     prediction = Prediction(
-        student_id=student_id, risk_level=result["risk_level"],
+        student_id=student.id, risk_level=result["risk_level"],
         confidence_score=result["confidence"], reason=result["reason"],
         ai_suggestion=suggestion, term=SEMESTER, year=YEAR,
     )
@@ -271,8 +290,18 @@ def run_predictions_for_all(db: Session = Depends(get_db), current_user: User = 
     return {"message": f"Predictions run for {len(results)} students", "results": results}
 
 
-@router.get("/student/{student_id}", response_model=List[PredictionResponse])
-def get_student_predictions(student_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):
-    if not _can_access_student(db, current_user, student_id):
+@router.get("/student/{student_identifier}", response_model=List[PredictionResponse])
+def get_student_predictions(student_identifier: str, db: Session = Depends(get_db), current_user: User = Depends(require_teacher)):
+    student = None
+    if student_identifier.isdigit():
+        student = db.query(Student).filter(Student.id == int(student_identifier)).first()
+    if not student:
+        student = db.query(Student).filter(
+            (Student.student_id == student_identifier) |
+            (Student.student_id.ilike(student_identifier))
+        ).first()
+    if not student:
+        raise HTTPException(status_code=404, detail=f"Student '{student_identifier}' not found")
+    if not _can_access_student(db, current_user, student.id):
         raise HTTPException(status_code=403, detail="Not authorized")
-    return db.query(Prediction).filter(Prediction.student_id == student_id).order_by(Prediction.generated_at.desc()).all()
+    return db.query(Prediction).filter(Prediction.student_id == student.id).order_by(Prediction.generated_at.desc()).all()

@@ -13,6 +13,7 @@ from models.quiz import QuizAttempt, Quiz
 from models.announcement import Announcement
 from models.class_model import Class
 from models.teacher_assignment import TeacherAssignment
+from models.enrollment import Enrollment
 from schemas.report_card import ReportCardGenerate, ReportCardResponse, BulkResultsGenerate
 from core.dependencies import require_admin, require_teacher, get_current_user, get_current_student
 from core.config import settings
@@ -77,12 +78,21 @@ def get_class_students_scores(
         target_subject = current_user.subject or "Biology"
 
     # Get students belonging to class_name
-    students_query = db.query(Student)
     if class_name:
-        students_query = students_query.filter(Student.class_name == class_name)
-    students = students_query.all()
-    if not students:
-        students = db.query(Student).all()
+        target_class_obj = target_class or db.query(Class).filter(Class.name == class_name).first()
+        enrolled_ids = []
+        if target_class_obj:
+            enrolled_ids = [
+                e.student_id for e in
+                db.query(Enrollment.student_id).filter(Enrollment.class_id == target_class_obj.id).all()
+            ]
+        from sqlalchemy import or_
+        filters = [Student.class_name == class_name]
+        if enrolled_ids:
+            filters.append(Student.id.in_(enrolled_ids))
+        students = db.query(Student).filter(or_(*filters)).distinct().all()
+    else:
+        students = db.query(Student).filter(Student.teacher_id == current_user.id).all()
 
     result = []
     for student in students:
@@ -167,12 +177,20 @@ def get_class_compiled_transcripts(
     Directly fetches teacher-generated grades & subject scores for each student in a class
     and compiles them into an Official Terminal Transcript overview for Admin.
     """
-    students_query = db.query(Student)
     if class_name:
-        students_query = students_query.filter(Student.class_name == class_name)
-    students = students_query.all()
-
-    if not students:
+        target_class_obj = db.query(Class).filter(Class.name == class_name).first()
+        enrolled_ids = []
+        if target_class_obj:
+            enrolled_ids = [
+                e.student_id for e in
+                db.query(Enrollment.student_id).filter(Enrollment.class_id == target_class_obj.id).all()
+            ]
+        from sqlalchemy import or_
+        filters = [Student.class_name == class_name]
+        if enrolled_ids:
+            filters.append(Student.id.in_(enrolled_ids))
+        students = db.query(Student).filter(or_(*filters)).distinct().all()
+    else:
         students = db.query(Student).all()
 
     compiled_students = []

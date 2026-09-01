@@ -270,20 +270,25 @@ export default function Quizzes() {
                 {['option_a', 'option_b', 'option_c', 'option_d'].map((opt, idx) => {
                   const optionText = current[opt];
                   if (!optionText) return null;
-                  const selected = answers[currentIndex] === optionText;
+                  const optionLetter = ['A', 'B', 'C', 'D'][idx];
+                  const selected = answers[currentIndex] === optionText || answers[currentIndex] === optionLetter;
                   return (
                     <button
                       key={opt}
                       type="button"
-                      onClick={() => setAnswers({ ...answers, [currentIndex]: optionText })}
+                      onClick={() => setAnswers({ ...answers, [currentIndex]: optionLetter })}
                       className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left text-sm font-medium transition ${
                         selected
-                          ? 'border-[#0A192F] bg-slate-50 text-slate-900 ring-1 ring-[#0A192F]'
+                          ? 'border-emerald-500 bg-emerald-50/60 text-slate-900 ring-2 ring-emerald-500/20 shadow-sm'
                           : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <span className={`h-4 w-4 rounded-full border ${selected ? 'border-[#0A192F] bg-[#0A192F] ring-2 ring-white ring-inset' : 'border-slate-400'}`} />
-                      {optionText}
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 ${
+                        selected ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}>
+                        {optionLetter}
+                      </span>
+                      <span className="flex-1">{optionText}</span>
                     </button>
                   );
                 })}

@@ -82,3 +82,13 @@ export const getTeacherQuizzes = async () => {
   const response = await api.get('/quizzes/teacher');
   return response.data;
 };
+
+export const updateQuiz = async (quizId, data) => {
+  const response = await api.put(`/quizzes/${quizId}`, data);
+  return response.data;
+};
+
+export const unpublishQuiz = async (quizId) => {
+  const response = await api.post(`/quizzes/${quizId}/unpublish`);
+  return response.data;
+};

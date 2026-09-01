@@ -11,6 +11,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { getStoredUser, logout } from '../services/authService';
+import logoIconLight from '../assets/edualert_logo_icon_light.svg';
 
 const headmasterNavItems = [
   { name: 'Dashboard', path: '/headmaster/dashboard', icon: LayoutGrid },
@@ -18,6 +19,7 @@ const headmasterNavItems = [
   { name: 'At-Risk Students', path: '/headmaster/at-risk-students', icon: AlertTriangle },
   { name: 'Bulk Report Cards', path: '/headmaster/bulk-report-cards', icon: FileText },
   { name: 'Class Management', path: '/headmaster/class-management', icon: Users },
+  { name: 'Manage Teachers', path: '/headmaster/teachers', icon: GraduationCap },
   { name: 'Announcements', path: '/headmaster/announcements', icon: Megaphone },
 ];
 
@@ -34,8 +36,8 @@ export default function HeadmasterSidebar() {
     <aside className="w-64 bg-[#0A192F] text-slate-300 flex flex-col justify-between min-h-screen shrink-0 border-r border-slate-800/60 font-sans">
       <div className="p-5">
         <div className="flex items-center gap-3 mb-8 px-2">
-          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-slate-950 font-bold shadow-md shadow-emerald-500/20 shrink-0">
-            <GraduationCap className="w-6 h-6 text-slate-950" />
+          <div className="w-10 h-10 flex items-center justify-center shrink-0">
+            <img src={logoIconLight} alt="EduAlert GH" className="w-10 h-10" />
           </div>
           <div>
             <h1 className="text-white font-bold text-base leading-tight tracking-tight">EduAlert GH</h1>

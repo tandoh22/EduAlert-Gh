@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { User, Mail, Lock, GraduationCap } from "lucide-react";
+import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { registerUser } from "../services/authService";
+import logoIcon from "../assets/edualert_logo_icon.svg";
 
 const ROLES = [
   { value: "student", label: "Student" },
@@ -14,6 +15,11 @@ const ADMITTED_COURSES = [
   "Visual Arts",
   "General Business",
   "Home Economics",
+];
+
+const GENDERS = [
+  { value: "Male", label: "Male" },
+  { value: "Female", label: "Female" },
 ];
 
 function getErrorMessage(err) {
@@ -30,7 +36,9 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState("");
+  const [gender, setGender] = useState("");
   const [admittedCourse, setAdmittedCourse] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +48,14 @@ export default function RegisterPage() {
     e.preventDefault();
     if (!role) {
       setError("Please select whether you're a student or teacher.");
+      return;
+    }
+    if (role === "student" && !gender) {
+      setError("Please select your gender.");
+      return;
+    }
+    if (role === "student" && !admittedCourse) {
+      setError("Please select the course you were admitted into.");
       return;
     }
     setLoading(true);
@@ -52,6 +68,7 @@ export default function RegisterPage() {
         password,
         role,
         admitted_course: role === "student" ? admittedCourse : null,
+        gender: role === "student" ? gender : null,
       });
       setSubmitted(true);
     } catch (err) {
@@ -65,8 +82,8 @@ export default function RegisterPage() {
     return (
       <div className="w-full min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8 md:p-10 text-center">
-          <div className="w-11 h-11 rounded-full bg-blue-950 flex items-center justify-center mx-auto mb-5">
-            <GraduationCap className="w-5 h-5 text-white" />
+          <div className="w-11 h-11 flex items-center justify-center mx-auto mb-5">
+            <img src={logoIcon} alt="EduAlert GH" className="w-11 h-11" />
           </div>
           <h2 className="text-lg font-extrabold text-slate-900 mb-2">Account created</h2>
           <p className="text-sm text-slate-500 mb-6">
@@ -88,8 +105,8 @@ export default function RegisterPage() {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8 md:p-10">
         {/* Header */}
         <div className="flex items-center gap-3 mb-7">
-          <div className="w-11 h-11 rounded-full bg-blue-950 flex items-center justify-center flex-shrink-0">
-            <GraduationCap className="w-5 h-5 text-white" />
+           <div className="w-11 h-11 flex items-center justify-center flex-shrink-0">
+            <img src={logoIcon} alt="EduAlert GH" className="w-11 h-11" />
           </div>
           <div>
             <h2 className="text-lg font-extrabold text-slate-900 leading-tight">
@@ -163,6 +180,14 @@ export default function RegisterPage() {
                 required
                 className="w-full pl-10 pr-3.5 py-3 text-sm border border-slate-200 rounded-lg bg-white text-slate-900 placeholder-slate-400 outline-none focus:border-blue-800 focus:ring-4 focus:ring-blue-800/10 transition"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
@@ -187,6 +212,30 @@ export default function RegisterPage() {
               ))}
             </div>
           </div>
+
+          {/* Gender selection — students only */}
+          {role === "student" && (
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-900 mb-1.5">Gender</label>
+              <div className="grid grid-cols-2 gap-2">
+                {GENDERS.map((g) => (
+                  <button
+                    key={g.value}
+                    type="button"
+                    onClick={() => setGender(g.value)}
+                    aria-pressed={gender === g.value}
+                    className={`py-2.5 px-2 text-sm font-semibold rounded-xl transition ${
+                      gender === g.value
+                        ? "border-2 border-blue-900 bg-white text-blue-950"
+                        : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Admitted course — students only */}
           {role === "student" && (

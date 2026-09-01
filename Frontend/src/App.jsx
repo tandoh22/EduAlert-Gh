@@ -36,6 +36,7 @@ import StudentPerformance from './pages/headmaster/StudentPerformance';
 import BulkReportCards from './pages/headmaster/BulkReportCards';
 import ClassManagement from './pages/headmaster/ClassManagement';
 import HeadmasterAnnouncements from './pages/headmaster/HeadmasterAnnouncements';
+import TeacherManagement from './pages/headmaster/TeacherManagement';
 
 export default function App() {
   return (
@@ -365,6 +366,16 @@ export default function App() {
             <ProtectedRoute>
               <HeadmasterLayout>
                 <ClassManagement />
+              </HeadmasterLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/headmaster/teachers"
+          element={
+            <ProtectedRoute>
+              <HeadmasterLayout>
+                <TeacherManagement />
               </HeadmasterLayout>
             </ProtectedRoute>
           }

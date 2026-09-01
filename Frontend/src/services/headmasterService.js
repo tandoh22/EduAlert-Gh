@@ -18,7 +18,15 @@ export const updateClass = (classId, data) => api.put(`/classes/${classId}`, dat
 
 export const deleteClass = (classId) => api.delete(`/classes/${classId}`);
 
-export const approveUser = (userId, assignments) =>
-  api.post(`/auth/approve-user/${userId}`, { assignments });
+export const approveUser = (userId, assignments = [], gender = undefined) =>
+  api.post(`/auth/approve-user/${userId}`, { assignments, gender });
 
 export const rejectUser = (userId) => api.post(`/auth/reject-user/${userId}`);
+
+export const fetchTeachers = () => api.get('/admin/teachers');
+
+export const addTeacherAssignment = (teacherId, classId, subject) =>
+  api.post(`/admin/teachers/${teacherId}/assignments`, { class_id: classId, subject });
+
+export const removeTeacherAssignment = (assignmentId) =>
+  api.delete(`/admin/teacher-assignments/${assignmentId}`);
